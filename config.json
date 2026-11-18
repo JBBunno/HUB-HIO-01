@@ -69,7 +69,7 @@
           "title": "Schedule Data Upload",
           "desc": "Upload the MS Project Excel export",
           "icon": "upload",
-          "url": "",
+          "url": "https://jbbunno.github.io/HUB-HIO-01/upload/",
           "enabled": true,
           "open": "tab"
         },
