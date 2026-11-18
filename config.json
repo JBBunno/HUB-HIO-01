@@ -14,7 +14,7 @@
           "title": "Progress Dashboard",
           "desc": "Shutdown KPIs, S-curve and progress reporting",
           "icon": "chart",
-          "url": "",
+          "url": "https://jbbunno.github.io/DASH-HIO-01/",
           "enabled": true,
           "open": "tab"
         },
