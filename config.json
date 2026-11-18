@@ -23,7 +23,7 @@
           "title": "Online Gantt",
           "desc": "Interactive WBS Gantt from the live schedule",
           "icon": "gantt",
-          "url": "",
+          "url": "https://jbbunno.github.io/HUB-HIO-01/gantt/",
           "enabled": true,
           "open": "tab"
         },
