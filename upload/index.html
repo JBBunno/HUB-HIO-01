@@ -30,7 +30,7 @@
     .card h2 { margin: 0 0 4px; font-size: 18px; font-weight: 400; color: var(--teal); letter-spacing: 1px; }
     .card .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
     label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-    input[type=password] {
+    input[type=password], input[type=datetime-local] {
       width: 100%; padding: 9px 10px; font-size: 14px; font-family: inherit;
       background: var(--navy); color: var(--text);
       border: 1px solid rgba(90,180,212,.4); border-radius: 6px;
@@ -72,6 +72,8 @@
     <div class="panel card">
       <h2>SPT Shutdown Schedule</h2>
       <p class="hint">Excel export containing the <b>Tasks</b> and <b>ExcSum</b> sheets.</p>
+      <label for="sdate">Status Date <span style="color:var(--amber)">*</span> — the Status Date set in MS Project for this export</label>
+      <input type="datetime-local" id="sdate" style="margin-bottom:12px">
       <div class="drop" id="drop">Drop the Excel file here or <b>click to choose</b></div>
       <input type="file" id="file" accept=".xlsx,.xlsm,.xls" hidden>
       <div class="fname" id="fname"></div>
@@ -92,11 +94,13 @@
 
 <script>
   // ===== Set this to the HIO upload Apps Script web app URL (ends in /exec) =====
-  const EXEC_URL = 'https://script.google.com/macros/s/AKfycbzMP34afiShlq1FHBFbhULSsYIeeFriqorOMvRwpaMmgwWXoLD-bi0SqnzQYyEBchdIfQ/exec';
+  const EXEC_URL = 'PASTE_HIO_UPLOAD_GAS_URL_HERE';
   const MAX_MB   = 40;
 
   const $ = id => document.getElementById(id);
   let chosen = null;
+  // start from the status date used last time on this computer
+  try { const last = localStorage.getItem('hio_upload_sd'); if (last) $('sdate').value = last; } catch (e) {}
 
   function setStatus(msg, cls) { const s = $('status'); s.className = 'status ' + (cls || ''); s.textContent = msg; }
   function pick(f) {
@@ -126,8 +130,11 @@
     const pin = $('pin').value.trim();
     if (!chosen) return setStatus('Please choose a file.', 'err');
     if (!pin)    return setStatus('Please enter the PIN at the top.', 'err');
+    const statusDate = $('sdate').value;
+    if (!statusDate) return setStatus('Please enter the Status Date used in MS Project.', 'err');
     if (chosen.size > MAX_MB * 1048576) return setStatus('File is larger than ' + MAX_MB + ' MB.', 'err');
-    if (!confirm('Replace the HIO dashboard data with "' + chosen.name + '"?')) return;
+    if (!confirm('Replace the HIO dashboard data with "' + chosen.name + '"\nStatus date: ' + statusDate.replace('T', ' ') + ' ?')) return;
+    try { localStorage.setItem('hio_upload_sd', statusDate); } catch (e) {}
 
     $('btn').disabled = true;
     setStatus('Uploading and updating… this can take up to a minute. Please keep this page open.', 'busy');
@@ -136,7 +143,7 @@
       const res = await fetch(EXEC_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // avoids CORS preflight
-        body: JSON.stringify({ action: 'upload', pin, fileName: chosen.name, base64 })
+        body: JSON.stringify({ action: 'upload', pin, fileName: chosen.name, base64, statusDate })
       });
       const data = await res.json();
       setStatus(data.message, data.ok ? 'ok' : 'err');
