@@ -195,7 +195,10 @@ body:not(.sched) .sched-only{display:none!important}
   <select id="filter">
     <option value="all">All tasks</option>
     <option value="open">Not completed</option>
-    <option value="critical">Critical path</option>
+    <option value="critical">Critical (total slack ≤ 0)</option>
+    <option value="cpct">CP / CT rows</option>
+    <option value="cp">CP only</option>
+    <option value="ct">CT only</option>
     <option value="late">Late</option>
     <option value="ip">In progress</option>
     <option value="ns">Not started</option>
@@ -212,6 +215,16 @@ body:not(.sched) .sched-only{display:none!important}
   <label>Group</label>
   <select id="g1" title="How rows are grouped into expandable levels"></select>
   <select id="g2" title="Second grouping level"></select>
+  <label>Sort</label>
+  <select id="sortBy" title="Sort tasks within each WBS level / group">
+    <option value="wbs">WBS order</option>
+    <option value="start">Start (earliest first)</option>
+    <option value="finish">Finish (earliest first)</option>
+    <option value="team">Team (A–Z)</option>
+    <option value="pct">% complete (lowest first)</option>
+    <option value="slack">Total slack (least first)</option>
+    <option value="name">Task name (A–Z)</option>
+  </select>
   <label>Show levels</label>
   <div class="seg" id="levels"></div>
   <label>Zoom</label>
@@ -325,7 +338,8 @@ const FIELDS = [
   ['duration','Duration'],['pct','% Complete'],['summary','Summary (Yes/No)'],['milestone','Milestone (Yes/No)'],
   ['critical','Critical (Yes/No)'],['preds','Predecessors'],['team','Team'],['res','Resource names'],['notes','Notes'],
   ['bstart','Baseline start'],['bfinish','Baseline finish'],['astart','Actual start'],['afinish','Actual finish'],
-  ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)']
+  ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)'],
+  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)']
 ];
 const ALIASES = {
   name:['name','taskname','task','activityname','activity','description','tasks'],
@@ -345,7 +359,8 @@ const ALIASES = {
   notes:['notes','note','comments','supervisornotes'],
   bstart:['baselinestart','plannedstart','baseline0start'], bfinish:['baselinefinish','plannedfinish','baseline0finish'], astart:['actualstart'], afinish:['actualfinish'],
   deadline:['deadline'], sdate:['statusdate','datadate'], link:['hyperlink','hyperlinkaddress','link'],
-  exec:['executivesummary','executivcesummary','execsummary','exec']
+  exec:['executivesummary','executivcesummary','execsummary','exec'],
+  slack:['totalslack','slack','totalfloat','float'], cpct:['cpct','cpctflag','cpflag']
 };
 const DATE_FIELDS = ['start','finish','bstart','bfinish','astart','afinish','deadline','sdate'];
 const ST_LABEL = {done:'Complete', late:'Late', ip:'In progress', ns:'Not started'};
@@ -357,7 +372,7 @@ const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const S = {
   tasks:[], byId:new Map(), headers:[], dateCols:new Set(), source:'', sheet:'', project:'',
   zoom:'day', expanded:new Set(), filter:'all', q:'', statusDate:new Date(),
-  fTeam:'', fRes:'', base:[], skipped:0, sdManual:false, dataSD:null, group:{g1:'outline', g2:-1}, hasOutline:true, live:null, dmy:true,
+  fTeam:'', fRes:'', base:[], skipped:0, sdManual:false, dataSD:null, group:{g1:'outline', g2:-1}, sort:'wbs', hasOutline:true, live:null, dmy:true,
   visible:[], selI:-1, minLevel:1, maxLevel:1, hasTimes:true,
   t0:0, t1:0, px:0, gridW:0, canvasW:0, cols:COLS, pending:null, wb:null
 };
@@ -537,7 +552,7 @@ function applyData(opts={}){
       durText: /^[\d.,]+$/.test(durStr) ? '' : durStr,
       summaryCol: map.summary >= 0 ? parseBool(get(r, 'summary')) : null,
       milestoneCol: map.milestone >= 0 ? parseBool(get(r, 'milestone')) : null,
-      critical: parseBool(get(r, 'critical')),
+      critical: map.critical >= 0 ? parseBool(get(r, 'critical')) : null,   // set below from Total Slack if no Critical column
       predsRaw: String(get(r, 'preds') ?? '').trim(),
       res: String(get(r, 'res') ?? '').trim(),
       team: String(get(r, 'team') ?? '').trim(),
@@ -546,6 +561,8 @@ function applyData(opts={}){
       astart: parseDate(get(r, 'astart'), dmy), afinish: parseDate(get(r, 'afinish'), dmy),
       deadline: parseDate(get(r, 'deadline'), dmy), link: String(get(r, 'link') ?? '').trim(),
       exec: parseBool(get(r, 'exec')),
+      slack: (v => { const n = parseFloat(String(v ?? '').replace(/[^\d.\-eE]/g, '')); return isNaN(n) ? null : n; })(get(r, 'slack')),
+      cpct: parseInt(get(r, 'cpct'), 10) || 0,
       children: [], parent: -1
     });
   });
@@ -556,6 +573,7 @@ function applyData(opts={}){
     t.oSummary = t.summaryCol === true || (hasOutline && !!next && next.oLevel > t.oLevel);
     if(!t.id) t.id = String(i + 1);
     if(!t.oSummary && t.pct == null) t.pct = 0;
+    if(t.critical === null) t.critical = t.slack !== null && t.slack <= 0 && (t.pct == null || t.pct < 99.5);
     const zeroDur = /^0+(\.0+)?\s*[a-z]*\??$/i.test(t.durText);
     t.milestone = t.milestoneCol != null ? t.milestoneCol : (!t.oSummary && ((t.start && t.finish && +t.start === +t.finish) || zeroDur));
     if(!t.durText && t.start && t.finish) t.durText = fmtDurMs(t.finish - t.start);
@@ -689,8 +707,38 @@ function rebuildTree(){
     const cnt = [];
     out.forEach(t => { cnt.length = t.level; cnt[t.level - 1] = (cnt[t.level - 1] || 0) + 1; if(t.synthetic) t.wbs = cnt.slice(0, t.level).map(n => n || 1).join('.'); });
   }
-  S.tasks = out;
+  S.tasks = sortTree(out);
   S.minLevel = Math.min(...out.map(t => t.level)); S.maxLevel = Math.max(...out.map(t => t.level));
+}
+// Sort siblings within each parent (the WBS structure is kept). Ties keep WBS order.
+function sortTree(out){
+  const k = S.sort || 'wbs';
+  if(k === 'wbs') return out;
+  const last = Number.POSITIVE_INFINITY;
+  const key = {
+    start:  t => t.start ? +t.start : last,
+    finish: t => t.finish ? +t.finish : last,
+    pct:    t => t.pct == null ? last : t.pct,
+    slack:  t => t.slack == null ? last : t.slack,
+  }[k];
+  const txt = k === 'team' ? (t => t.team || '') : k === 'name' ? (t => t.name || '') : null;
+  const cmp = (a, b) => {
+    if(txt){
+      const x = txt(a), y = txt(b);
+      if(!x !== !y) return x ? -1 : 1;                       // blanks last
+      const c = x.localeCompare(y, undefined, {numeric:true, sensitivity:'base'});
+      if(c) return c;
+      return (a.start ? +a.start : last) - (b.start ? +b.start : last) || a.i - b.i;
+    }
+    return (key(a) - key(b)) || a.i - b.i;
+  };
+  const res = [];
+  const walk = t => { const old = t.children; res.push(t); old.map(c => out[c]).sort(cmp).forEach(walk); };
+  out.filter(t => t.parent < 0).sort(cmp).forEach(walk);
+  const map = new Map(res.map((t, n) => [t.i, n]));
+  res.forEach(t => { t.children = t.children.map(c => map.get(c)); if(t.parent >= 0) t.parent = map.get(t.parent); });
+  res.forEach((t, n) => { t.i = n; });
+  return res;
 }
 function defaultExpand(){ if(S.tasks.length <= 120) expandAll(); else expandTo(S.minLevel + 1); }
 function snapshotView(){
@@ -726,11 +774,17 @@ function matches(t){
   switch(S.filter){
     case 'all': return true;
     case 'open': return !t.summary && status(t) !== 'done';   // in progress + not started (incl. late)
-    case 'critical': return t.critical;
+    case 'critical': return !t.summary && t.critical;
+    case 'cpct': return t.cpct === 1 || t.cpct === 2;
+    case 'cp': return t.cpct === 1;
+    case 'ct': return t.cpct === 2;
+    // by % complete only, whatever the dates (late tasks are included)
+    case 'ns': return !t.summary && (t.pct || 0) <= 0;
+    case 'ip': return !t.summary && t.pct > 0 && t.pct < 99.5;
     case 'ms': return t.milestone;
     case 'exec': return !!t.exec;
     case 'wbs': return t.summary;
-    case 'late': case 'ip': case 'ns': case 'done': return !t.summary && status(t) === S.filter;
+    case 'late': case 'done': return !t.summary && status(t) === S.filter;
     case 'next12': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 12*HOUR;
     case 'next24': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 24*HOUR;
     case 'next7d': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 7*DAY;
@@ -944,7 +998,7 @@ function openCard(i){
     <div class="crumb">${crumbs.map(esc).join(' › ') || '&nbsp;'}</div>
     <div class="tag">${t.wbs ? 'WBS ' + esc(t.wbs) + ' · ' : ''}ID ${esc(t.id)}</div>
     <h2>${esc(t.name)}</h2>
-    <div class="pills"><span class="pill ${st}">${ST_LABEL[st]}</span>${t.critical ? '<span class="pill crit">Critical</span>' : ''}${t.milestone ? '<span class="pill">Milestone</span>' : ''}${t.summary ? '<span class="pill">Summary</span>' : ''}${t.exec ? '<span class="pill">Exec summary</span>' : ''}</div>
+    <div class="pills"><span class="pill ${st}">${ST_LABEL[st]}</span>${t.critical ? '<span class="pill crit">Critical</span>' : ''}${t.cpct === 1 ? '<span class="pill crit">CP</span>' : t.cpct === 2 ? '<span class="pill late">CT</span>' : ''}${t.milestone ? '<span class="pill">Milestone</span>' : ''}${t.summary ? '<span class="pill">Summary</span>' : ''}${t.exec ? '<span class="pill">Exec summary</span>' : ''}</div>
     <button class="x" id="cardX" title="Close (Esc)">×</button></div><div class="cb">`;
   html += `<div class="big"><b>${pct}%</b><div class="pbar"><i style="width:${pct}%;background:${st === 'done' ? 'var(--done)' : st === 'late' ? 'var(--late)' : 'var(--task)'}"></i></div></div>`;
   html += `<div class="kv">
@@ -1324,6 +1378,12 @@ function regroup(){
   buildGroupSelects(); buildLevelButtons(); layout(); refresh(); scroller.scrollTop = 0;
 }
 $('#g1').addEventListener('change', regroup);
+$('#sortBy').addEventListener('change', e => {
+  S.sort = e.target.value;
+  const prev = snapshotView();
+  rebuildTree(); restoreView(prev); closeCard(true);
+  buildLevelButtons(); layout(); refresh();
+});
 $('#g2').addEventListener('change', regroup);
 $('#btnRefresh').addEventListener('click', () => { if(S.live) loadGoogle(S.live.input, {keepView:true}); });
 $('#btnSheet').addEventListener('click', () => {
