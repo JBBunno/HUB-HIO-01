@@ -1265,12 +1265,30 @@ async function loadGoogle(input, opts={}){
     const auto = S.live ? S.live.auto : (opts.auto != null ? opts.auto : CONFIG.AUTO_REFRESH_MIN);
     S.live = {input, id:s.id, auto: opts.auto != null ? opts.auto : auto, at:Date.now()};
     loadWorkbook(wb, 'Google Sheet', {keepView: !!opts.keepView});
+    await applyMetaStatusDate(s.id);
     if(opts.keepView && !opts.quiet) toast('Refreshed from Google Sheet');
     return true;
   } catch(e){
     if(!opts.quiet) toast('Could not read the Google Sheet: ' + e.message, 5000);
     return false;
   } finally { btn.disabled = false; }
+}
+// Status date entered on the HIO Upload Panel lives in the sheet's "Meta" tab (row 4: Status Date | dd/MM/yy HH:mm).
+// Used unless the viewer has picked their own date in the Status date box.
+async function applyMetaStatusDate(id){
+  try {
+    const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=Meta&_=${Date.now()}`, {cache:'no-store'});
+    if(!r.ok) return;
+    const txt = await r.text();
+    const line = txt.split(/\r?\n/).find(l => /status\s*date/i.test(l));
+    if(!line) return;
+    const val = (line.split(',')[1] || '').replace(/"/g, '').trim();
+    const d = parseDate(val, true);
+    if(!d) return;
+    S.dataSD = d;
+    if(!S.sdManual){ S.statusDate = d; setStatusInput(); updateKPI(); refresh(); }
+    S.sdFromUpload = true;
+  } catch(e) { /* no Meta tab or not reachable – keep current time */ }
 }
 function updateSourceLabels(){
   const t = d => `${p2(d.getHours())}:${p2(d.getMinutes())}`;
