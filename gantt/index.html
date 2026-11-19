@@ -1025,6 +1025,8 @@ function openCard(i){
   }
   html += `</div>`;
 
+  // Project notes – shown near the top of the card so they're seen first
+  if(t.notes) html += `<div class="sec">Notes from Project</div><div class="notes">${esc(t.notes)}</div>`;
   if(t.synthetic) html += `<div class="kv"><div class="full"><span>Grouped by</span><b>${esc(t.groupCol)}: ${esc(t.groupVal || '(blank)')}</b></div></div>`;
   if(t.summary){
     const leaves = []; (function walk(j){ S.tasks[j].children.forEach(c => S.tasks[c].summary ? walk(c) : leaves.push(S.tasks[c])); })(i);
@@ -1037,7 +1039,6 @@ function openCard(i){
   const pr = t.preds.filter(p => p.t.inTree), su = t.succs.filter(p => p.t.inTree);
   if(pr.length) html += `<div class="sec">Predecessors</div><div class="links">${pr.map(p => linkHTML(p.t.i, p.type !== 'FS' || p.lag ? ` <em>${p.type}${esc(p.lag)}</em>` : '')).join('')}</div>`;
   if(su.length) html += `<div class="sec">Successors</div><div class="links">${su.map(p => linkHTML(p.t.i, p.type !== 'FS' || p.lag ? ` <em>${p.type}${esc(p.lag)}</em>` : '')).join('')}</div>`;
-  if(t.notes) html += `<div class="sec">Notes</div><div class="notes">${esc(t.notes)}</div>`;
   const rows = S.headers.map((h, ci) => [h, fmtRaw(t.raw[ci], ci)]).filter(([h, v]) => h && v !== '');
   if(rows.length) html += `<div class="sec">All fields from the export</div><table class="all">${rows.map(([h, v]) => `<tr><td>${esc(h)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`;
   html += `</div><div class="cf"><button id="cPrev" title="Previous row (↑)">◀ Prev</button><button id="cNext" title="Next row (↓)">Next ▶</button><span class="sp"></span><button id="cCopy">Copy details</button><button id="cShow">Show in Gantt</button></div>`;
