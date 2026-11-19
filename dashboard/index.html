@@ -234,6 +234,7 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
 .pd-wbs{color:var(--muted);font-family:var(--font-d);font-size:11px;white-space:nowrap}
 .pd-wo{color:var(--muted);font-family:var(--font-d);font-size:11px;white-space:nowrap}
 .pd-ms{color:var(--amber);font-size:10px}
+.pd-note{cursor:help;font-size:11px}
 .sd-chip{font-family:var(--font-d);font-size:11px;white-space:nowrap;background:transparent;color:var(--amber);
   border:1px solid rgba(232,152,32,.5);border-radius:var(--r);padding:4px 9px;cursor:pointer}
 .sd-chip:hover{background:rgba(232,152,32,.1)}
@@ -241,6 +242,8 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
 .sd-chip.unset{color:var(--red);border-color:rgba(224,85,85,.6)}
 .sd-row{display:grid;gap:10px}
 .sd-row label{font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sd-row select{padding:9px 6px;background:var(--panel);color:var(--bright);border:1px solid var(--border);
+  border-radius:var(--r);font-family:var(--font-d);font-size:13px}
 .sd-row input{width:100%;padding:9px 10px;background:var(--panel);color:var(--bright);border:1px solid var(--border);
   border-radius:var(--r);font-family:var(--font-d);font-size:13px;color-scheme:dark}
 .sd-msg{font-size:12px;min-height:1em;margin-top:8px}
@@ -1182,7 +1185,12 @@ loadAll();
     </div>
     <div class="pd-body">
       <div class="sd-row">
-        <div><label for="sdInput">Status date (as set in MS Project)</label><input type="datetime-local" id="sdInput"></div>
+        <div><label for="sdDay">Status date (as set in MS Project)</label>
+          <div style="display:flex;gap:6px">
+            <input type="date" id="sdDay" style="flex:1">
+            <select id="sdHour" title="Hour (24-hour)" style="width:74px"></select>
+            <select id="sdMin" title="Minutes" style="width:74px"></select>
+          </div></div>
         <div><label for="sdPin">Scheduler PIN</label><input type="password" id="sdPin" inputmode="numeric" autocomplete="off"></div>
       </div>
       <div class="sd-msg" id="sdMsg"></div>
@@ -1271,7 +1279,7 @@ function pdDetail(name, rows){
     _pdSel = _pdLists.late.rows.length ? 'late' : 'all';
     const tile = (k, color) => `<div class="pd-stat pd-tile" data-k="${k}" onclick="pdPick('${k}')" title="Show list">
         <b style="color:${color}">${_pdLists[k].rows.length}</b><span>${k === 'all' ? 'Total' : _pdLists[k].label}</span></div>`;
-    h += `<div class="pd-sec-label">Tasks in this area <span class="pd-hint">— click a tile to list the tasks</span></div>
+    h += `<div class="pd-sec-label">Tasks in this area <span class="pd-hint">— click a tile to list the tasks · 📝 = task has a Project note (hover to read)</span></div>
       <div class="pd-stats">
         ${tile('all', 'var(--bright)')}
         ${tile('done', 'var(--green)')}
@@ -1307,7 +1315,8 @@ function pdPick(k){
   const body = list.slice(0, MAX).map(t => {
     const wo = t.wo ? `${pdEsc(t.wo)}${t.op ? '/' + pdEsc(t.op) : ''}` : '—';
     const lateBy = showLate ? `<td style="color:var(--red);font-family:var(--font-d)">${pdDelay((now - t.pf) / 36e5)}</td>` : '';
-    return `<tr><td class="pd-wbs">${pdEsc(t.wbs)}</td><td>${pdEsc(t.name)}${t.ms ? ' <span class="pd-ms">◆</span>' : ''}</td>
+    const nt = t.notes ? ` <span class="pd-note" title="${pdEsc(t.notes)}">📝</span>` : '';
+    return `<tr><td class="pd-wbs">${pdEsc(t.wbs)}</td><td>${pdEsc(t.name)}${t.ms ? ' <span class="pd-ms">◆</span>' : ''}${nt}</td>
       <td class="pd-wo">${wo}</td><td>${cp(t.cpct)}</td><td>${t.pct}%</td><td>${fmtD(t.pf)}</td>${lateBy}</tr>`;
   }).join('');
   document.getElementById('pdList').innerHTML = !list.length
@@ -1323,7 +1332,14 @@ function pdClose(){ document.getElementById('pdModal').classList.remove('open');
 // so the dashboard, Gantt and everyone viewing use the same status date.
 function sdOpen(){
   const d = _statusDate || new Date(), p = n => String(n).padStart(2, '0');
-  document.getElementById('sdInput').value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  const hs = document.getElementById('sdHour'), ms = document.getElementById('sdMin');
+  if (!hs.options.length) {
+    hs.innerHTML = Array.from({length: 24}, (_, h) => `<option value="${p(h)}">${p(h)}:</option>`).join('');
+    ms.innerHTML = ['00','15','30','45'].map(m => `<option value="${m}">${m}</option>`).join('');
+  }
+  document.getElementById('sdDay').value = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  hs.value = p(d.getHours());
+  ms.value = p(Math.floor(d.getMinutes() / 15) * 15);
   document.getElementById('sdPin').value = '';
   document.getElementById('sdMsg').textContent = '';
   document.getElementById('sdModal').classList.add('open');
@@ -1331,7 +1347,9 @@ function sdOpen(){
 }
 function sdClose(){ document.getElementById('sdModal').classList.remove('open'); }
 async function sdSave(){
-  const v = document.getElementById('sdInput').value, pin = document.getElementById('sdPin').value.trim();
+  const day = document.getElementById('sdDay').value;
+  const v = day ? `${day}T${document.getElementById('sdHour').value}:${document.getElementById('sdMin').value}` : '';
+  const pin = document.getElementById('sdPin').value.trim();
   const msg = document.getElementById('sdMsg'), btn = document.getElementById('sdSave');
   if (!v)   { msg.style.color = 'var(--red)'; msg.textContent = 'Choose a date and time.'; return; }
   if (!pin) { msg.style.color = 'var(--red)'; msg.textContent = 'Enter the scheduler PIN.'; return; }
