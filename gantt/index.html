@@ -153,6 +153,9 @@ table.all td:first-child{color:var(--muted);width:42%}
 /* modal / misc */
 .ovl{position:fixed;inset:0;background:rgba(15,42,68,.45);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}
 .ovl.open{display:flex}
+body:not(.sched) .sched-only{display:none!important}
+.brand{cursor:default;user-select:none;-webkit-tap-highlight-color:transparent}
+#btnLock{border-color:var(--late);color:var(--late)}
 .dlg{background:#fff;border-radius:10px;max-width:640px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25)}
 .dlg h3{margin:0;padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px}
 .dlg .db{padding:14px 18px;overflow:auto}
@@ -180,8 +183,9 @@ table.all td:first-child{color:var(--muted);width:42%}
   <div class="proj" id="projName">Loading…<small id="projSub"></small></div>
   <div class="kpi" id="kpi"></div>
   <button id="btnRefresh" title="Reload the Google Sheet now" style="display:none">⟳ Refresh</button>
-  <button id="btnSheet" title="Load from a Google Sheet">Google Sheet…</button>
-  <button class="primary" id="btnLoad">Load Excel…</button>
+  <button id="btnSheet" class="sched-only" title="Load from a Google Sheet">Google Sheet…</button>
+  <button class="primary sched-only" id="btnLoad">Load Excel…</button>
+  <button id="btnLock" class="sched-only" title="Leave scheduler mode">🔒 Lock</button>
   <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
 </div>
 
@@ -190,6 +194,7 @@ table.all td:first-child{color:var(--muted);width:42%}
   <label>Filter</label>
   <select id="filter">
     <option value="all">All tasks</option>
+    <option value="open">Not completed</option>
     <option value="critical">Critical path</option>
     <option value="late">Late</option>
     <option value="ip">In progress</option>
@@ -254,7 +259,7 @@ table.all td:first-child{color:var(--muted);width:42%}
     </ul>
     <p>Dates can be Excel dates or text like <code>Mon 16/11/26 7:00 AM</code>. Rows must stay in Project's order (top to bottom), which is how Project exports them.</p>
     <p><b>Hosting:</b> put this page and your export named <code>schedule.xlsx</code> in the same folder (e.g. GitHub Pages) and it loads automatically. <code>?file=other.xlsx</code> picks a different file.</p>
-    <p style="margin-bottom:0"><button id="btnMapOpen">Change column matching…</button> <button id="btnSample">Load sample shutdown</button></p>
+    <p style="margin-bottom:0" class="sched-only"><button id="btnMapOpen">Change column matching…</button> <button id="btnSample">Load sample shutdown</button></p>
   </div>
   <div class="df"><button class="primary" id="helpClose">Close</button></div>
 </div></div>
@@ -270,6 +275,14 @@ table.all td:first-child{color:var(--muted);width:42%}
   <div class="df"><button id="sheetForget">Forget saved link</button><span style="flex:1"></span><button id="sheetCancel">Cancel</button><button class="primary" id="sheetGo">Load sheet</button></div>
 </div></div>
 
+<div class="ovl" id="pinOvl"><div class="dlg" style="max-width:340px">
+  <h3>Scheduler access</h3>
+  <div class="db"><p style="margin-top:0">Enter the scheduler PIN to load a different file or sheet.</p>
+    <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" style="width:100%">
+    <p id="pinErr" style="color:var(--crit);margin-bottom:0;min-height:1em"></p></div>
+  <div class="df"><button id="pinCancel">Cancel</button><button class="primary" id="pinGo">Unlock</button></div>
+</div></div>
+
 <div id="drop">Drop your Project Excel export to load it</div>
 <div id="tip"></div>
 <div id="toast"></div>
@@ -282,7 +295,10 @@ const CONFIG = {
   // Add #gid=NNN (from the sheet's URL) to pick a tab other than the first one.
   SHEET: 'https://docs.google.com/spreadsheets/d/1rJZekITWewCW6qZEmWmheDzgMDseTRJhBUxVfzQoTmU/edit#gid=322475886',   // HIO Gantt Data – Tasks tab
   AUTO_REFRESH_MIN: 5,          // minutes between automatic reloads of the Google Sheet (0 = off)
-  FILE: ''                      // HIO uses the Google Sheet above (no local Excel file)
+  FILE: '',                     // HIO uses the Google Sheet above (no local Excel file)
+  // Scheduler PIN (SHA-256 hash). Tap the "PalmCrest" logo 5 times to unlock Load Excel / Google Sheet.
+  // Default PIN 2468 – to change, hash a new PIN (e.g. the Hub admin "Change access code" tool) and paste here.
+  SCHED_PIN_HASH: 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972'
 };
 /* ================= constants ================= */
 const RH = 26, HDR = 48;
@@ -709,6 +725,7 @@ function matches(t){
   const sd = +S.statusDate;
   switch(S.filter){
     case 'all': return true;
+    case 'open': return !t.summary && status(t) !== 'done';   // in progress + not started (incl. late)
     case 'critical': return t.critical;
     case 'ms': return t.milestone;
     case 'exec': return !!t.exec;
@@ -1083,10 +1100,44 @@ $('#rows').addEventListener('mouseleave', () => tip.style.display = 'none');
 
 /* drag & drop */
 let dragN = 0;
-addEventListener('dragenter', e => { e.preventDefault(); dragN++; $('#drop').classList.add('on'); });
+addEventListener('dragenter', e => { e.preventDefault(); if(!isSched()) return; dragN++; $('#drop').classList.add('on'); });
 addEventListener('dragleave', e => { dragN = Math.max(0, dragN - 1); if(!dragN) $('#drop').classList.remove('on'); });
 addEventListener('dragover', e => e.preventDefault());
-addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#drop').classList.remove('on'); const f = e.dataTransfer.files[0]; if(f) readFile(f); });
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#drop').classList.remove('on'); if(!isSched()) return; const f = e.dataTransfer.files[0]; if(f) readFile(f); });
+
+/* scheduler mode – Load Excel / Google Sheet / drag-drop are hidden until unlocked */
+function isSched(){ return document.body.classList.contains('sched'); }
+function setSched(on){
+  document.body.classList.toggle('sched', on);
+  try { on ? sessionStorage.setItem('hiogantt.sched', '1') : sessionStorage.removeItem('hiogantt.sched'); } catch(e) {}
+}
+async function sha256(t){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+let brandTaps = 0, brandTimer = null;
+$('.brand').addEventListener('click', () => {
+  brandTaps++; clearTimeout(brandTimer); brandTimer = setTimeout(() => brandTaps = 0, 2000);
+  if(brandTaps >= 5 && !isSched()){
+    brandTaps = 0; $('#pinIn').value = ''; $('#pinErr').textContent = '';
+    $('#pinOvl').classList.add('open'); setTimeout(() => $('#pinIn').focus(), 50);
+  }
+});
+async function tryPin(){
+  if(await sha256($('#pinIn').value.trim()) === CONFIG.SCHED_PIN_HASH){
+    setSched(true); $('#pinOvl').classList.remove('open'); toast('Scheduler mode on – Load Excel and Google Sheet are available');
+  } else { $('#pinErr').textContent = 'Incorrect PIN'; $('#pinIn').select(); }
+}
+$('#pinGo').addEventListener('click', tryPin);
+$('#pinIn').addEventListener('keydown', e => { if(e.key === 'Enter') tryPin(); });
+$('#pinCancel').addEventListener('click', () => $('#pinOvl').classList.remove('open'));
+$('#btnLock').addEventListener('click', () => {
+  setSched(false);
+  // back to the official HIO sheet if a different source was loaded
+  if(!S.live || S.live.input !== CONFIG.SHEET){ S.live = null; loadGoogle(CONFIG.SHEET); }
+  toast('Scheduler mode off');
+});
+try { if(sessionStorage.getItem('hiogantt.sched') === '1') document.body.classList.add('sched'); } catch(e) {}
 
 async function readFile(f){
   if(!window.XLSX){ toast('The Excel reader could not load – check your internet connection'); return; }
@@ -1296,7 +1347,9 @@ async function boot(){
   setStatusInput(); buildZoomButtons();
   let qs = {};
   try { qs = Object.fromEntries(new URLSearchParams(location.search)); } catch(e) {}
-  const sheet = qs.sheet || lsGet('hiogantt.sheet') || (qs.file ? '' : CONFIG.SHEET);
+  // Everyone sees the HIO sheet; saved links / ?sheet= / ?file= only apply in scheduler mode
+  if(!isSched()) qs = {};
+  const sheet = isSched() ? (qs.sheet || lsGet('hiogantt.sheet') || (qs.file ? '' : CONFIG.SHEET)) : CONFIG.SHEET;
   if(sheet){
     if(await loadGoogle(sheet, {quiet:true})) return;
     toast("Couldn't reach the Google Sheet from here – showing sample data. (Previews inside Claude block outside data; it works once hosted, e.g. on GitHub Pages. You can also use File › Download › .xlsx in Sheets and drop the file here.)", 9000);
