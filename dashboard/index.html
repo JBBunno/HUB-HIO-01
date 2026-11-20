@@ -248,6 +248,59 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
   border-radius:var(--r);font-family:var(--font-d);font-size:13px;color-scheme:dark}
 .sd-msg{font-size:12px;min-height:1em;margin-top:8px}
 .sd-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+
+/* ════════ TV / TOUCH-SCREEN MODE  (open with ?tv=1) ════════
+   The whole page is laid out on a fixed 1920×1080 "stage" that is scaled to fit
+   the screen, so nothing is cut off on any 16:9 display. Lists scroll inside
+   their own panel (finger swipe); touch targets are enlarged. */
+.tv-only,.tv-clock{display:none}
+html.tv,html.tv body{width:100%;height:100%;overflow:hidden;background:#05080d}
+html.tv #tvStage{position:fixed;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;
+  display:flex;flex-direction:column;overflow:hidden;background:var(--coal);font-size:16px}
+html.tv .tv-only{display:inline-flex}
+html.tv .tv-clock{display:inline;font-family:var(--font-d);font-size:20px;color:var(--bright);margin-left:12px}
+html.tv header{flex:none;padding:10px 24px;gap:14px}
+html.tv header .hdr-name{font-size:20px}
+html.tv header .hdr-meta,html.tv header .hdr-ago{font-size:14px}
+html.tv header .btn,html.tv .sd-chip{min-height:44px;padding:8px 18px;font-size:15px}
+html.tv nav{flex:none;padding:0 24px}
+html.tv nav button{font-size:19px;padding:16px 30px;min-height:60px}
+html.tv main{flex:1;min-height:0;max-width:none;width:100%;padding:14px 24px;display:flex;flex-direction:column;overflow:hidden}
+html.tv .err{flex:none}
+html.tv .tab-panel.active{flex:1;min-height:0;display:flex;flex-direction:column}
+/* lists: last panel fills the screen and scrolls inside */
+html.tv .tab-panel>.panel:last-child{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0}
+html.tv .tab-panel>.panel:last-child .tbl-wrap{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch}
+html.tv thead th{position:sticky;top:0;z-index:1;background:var(--panel)}
+html.tv table{font-size:15px} html.tv th{font-size:12px} html.tv td{padding-top:9px;padding-bottom:9px}
+html.tv .panel-title{font-size:13px}
+html.tv .filter-row input,html.tv .filter-row select{min-height:48px;font-size:16px;padding:8px 12px}
+/* Executive Summary on one screen */
+html.tv #tab-exec.active{display:grid;grid-template-columns:1.3fr 1fr;grid-template-rows:auto auto auto minmax(0,1fr);
+  grid-template-areas:"kpi kpi" "mw mw" "areas prog" "sc sc";gap:12px}
+html.tv #tab-exec>*{margin:0}
+html.tv .ex-kpi{grid-area:kpi} html.tv .ex-mw{grid-area:mw}
+html.tv .ex-areas{grid-area:areas;overflow:auto} html.tv .ex-prog{grid-area:prog;overflow:hidden}
+html.tv .ex-sc{grid-area:sc;display:flex;flex-direction:column;min-height:0}
+html.tv #scurveBox{flex:1;min-height:0;height:auto!important}
+html.tv #execShutdownName{font-size:34px}
+html.tv .kpi-cell-label{font-size:12px} html.tv .kpi-cell-value{font-size:24px} html.tv .kpi-cell-value.big{font-size:40px}
+html.tv .ex-areas td{padding-top:7px;padding-bottom:7px}
+/* areas table on TV: Area, % Comp, Target, Remaining, Forecast Finish, Hrs to Critical, Finish Var */
+html.tv #areaTable th:nth-child(4),html.tv #areaTable td:nth-child(4),
+html.tv #areaTable th:nth-child(5),html.tv #areaTable td:nth-child(5),
+html.tv #areaTable th:nth-child(6),html.tv #areaTable td:nth-child(6),
+html.tv #areaTable th:nth-child(8),html.tv #areaTable td:nth-child(8){display:none}
+html.tv .tag{font-size:13px;padding:3px 9px}
+html.tv .maint-field-label{font-size:11px} html.tv .maint-field-value{font-size:16px}
+html.tv #maintAreaSelect{font-size:12px!important}
+html.tv .gantt-label{font-size:13px;width:200px} html.tv .gantt-track{height:20px} html.tv .gantt-pct{font-size:13px;width:96px}
+html.tv .chart-legend-item{font-size:13px}
+/* pop-ups */
+html.tv .pd-modal{max-width:1200px;max-height:960px;font-size:16px}
+html.tv .pd-scroll{max-height:470px}
+html.tv .pd-close{font-size:34px;padding:4px 14px}
+html.tv .pd-tile{min-height:84px}
 </style>
 </head>
 <body>
@@ -261,6 +314,8 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
   <span class="hdr-meta" id="hdrUpload"></span>
   <span class="hdr-ago" id="hdrAgo"></span>
   <button class="sd-chip" id="sdChip" onclick="sdOpen()" title="Scheduler: change the status date (PIN)">Status date: —</button>
+  <span class="tv-clock" id="tvClock"></span>
+  <button class="btn tv-only" onclick="tvFullscreen()">⛶ Full screen</button>
   <button class="btn" onclick="loadAll()">↻ Refresh</button>
 </header>
 <nav>
@@ -275,12 +330,12 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
   <!-- ══ EXECUTIVE SUMMARY ══ -->
   <div id="tab-exec" class="tab-panel active">
     <!-- Name + KPIs -->
-    <div class="name-kpi-band mb12" id="nameKpiBand">
+    <div class="name-kpi-band mb12 ex-kpi" id="nameKpiBand">
       <div class="shutdown-name-block" id="execShutdownName">SHUTDOWN NAME HERE</div>
       <div class="kpi-band" id="execKpiBand"></div>
     </div>
     <!-- Maintenance Window -->
-    <div class="maint-band mb12">
+    <div class="maint-band mb12 ex-mw">
       <div class="maint-title">
         <select id="maintAreaSelect" onchange="renderMaintWindow()" style="
           background:transparent;border:none;color:var(--amber);
@@ -291,12 +346,12 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
       <div class="maint-fields" id="maintFields"></div>
     </div>
     <!-- Shutdown Areas Table -->
-    <div class="panel mb12">
+    <div class="panel mb12 ex-areas">
       <div class="panel-title">Shutdown Areas</div>
       <div class="tbl-wrap"><table id="areaTable"></table></div>
     </div>
     <!-- Gantt -->
-    <div class="panel mb12">
+    <div class="panel mb12 ex-prog">
       <div class="panel-title">Shutdown Progress</div>
       <div class="gantt-legend">
         <span><i style="background:var(--muted)"></i> Start Offset</span>
@@ -308,7 +363,7 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
       <div class="gantt-wrap" id="ganttChart"></div>
     </div>
     <!-- S-Curve -->
-    <div class="panel">
+    <div class="panel ex-sc">
       <div class="scurve-controls">
         <div class="panel-title" style="margin:0">S-Curve</div>
         <select id="scurveArea" onchange="renderScurve()"></select>
@@ -332,7 +387,7 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
         <div class="chart-legend-item" id="scurveSD" style="color:var(--amber)"></div>
         <div class="chart-legend-item" id="scurveGap"></div>
       </div>
-      <div style="position:relative;height:180px">
+      <div id="scurveBox" style="position:relative;height:180px">
         <canvas id="scurveCanvas"></canvas>
       </div>
     </div>
@@ -434,6 +489,35 @@ let _outDatesErr = null;
 let _fieldRowsFiltered = [];
 let _outstandingRowsFiltered = [];
 let _scurveChart = null;
+
+// ── TV / TOUCH-SCREEN MODE (?tv=1) ────────────────────────────
+const TV = /[?&]tv(=1|=true)?(&|$)/i.test(location.search);
+const FS = TV ? 1.35 : 1;                     // chart font scale
+if (TV) {
+  document.documentElement.classList.add('tv');
+  const stage = document.createElement('div');
+  stage.id = 'tvStage';
+  while (document.body.firstChild) stage.appendChild(document.body.firstChild);
+  document.body.appendChild(stage);
+  const fit = () => {
+    const k = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = `scale(${k})`;
+    stage.style.left = Math.max(0, (innerWidth  - 1920 * k) / 2) + 'px';
+    stage.style.top  = Math.max(0, (innerHeight - 1080 * k) / 2) + 'px';
+  };
+  addEventListener('resize', fit); fit();
+  const clock = () => {
+    const d = new Date(), p = n => String(n).padStart(2, '0');
+    const el = document.getElementById('tvClock'); if (el) el.textContent = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  clock(); setInterval(clock, 15000);
+  setInterval(() => loadAll(true), 5 * 60 * 1000);   // quiet auto-refresh every 5 min
+}
+function tvFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+}
 let _statusDate = null, _statusDateTxt = '', _statusDateSet = false;
 // ── TABS ──────────────────────────────────────────────────────
 function switchTab(id, btn) {
@@ -456,8 +540,8 @@ function showErr(msg) {
   b.textContent = msg;
   b.style.display = 'block';
 }
-async function loadAll() {
-  document.getElementById('overlay').style.display = 'flex';
+async function loadAll(quiet) {
+  if (!quiet) document.getElementById('overlay').style.display = 'flex';
   document.getElementById('errBanner').style.display = 'none';
   try {
     // outstandingdates is fetched separately and never allowed to throw —
@@ -812,17 +896,17 @@ function renderScurve() {
       },
       scales: {
         x: {
-          ticks: { color: '#4d6080', font: { size: 10 }, maxRotation: 45 },
+          ticks: { color: '#4d6080', font: { size: 10 * FS }, maxRotation: 45 },
           grid:  { color: 'rgba(42,52,68,.4)' },
         },
         yPct: {
           type: 'linear', position: 'left', min: 0, max: 100,
-          ticks: { color: '#4d6080', font: { size: 11 }, stepSize: 20, callback: v => v + '%' },
+          ticks: { color: '#4d6080', font: { size: 11 * FS }, stepSize: 20, callback: v => v + '%' },
           grid: { color: 'rgba(42,52,68,.4)' },
         },
         yHrs: {
           type: 'linear', position: 'right', min: 0,
-          ticks: { color: '#4d6080', font: { size: 11 }, callback: v => v + ' Hrs' },
+          ticks: { color: '#4d6080', font: { size: 11 * FS }, callback: v => v + ' Hrs' },
           grid: { drawOnChartArea: false },
         },
       },
@@ -885,12 +969,12 @@ function renderVendorChart() {
       },
       scales: {
         x: {
-          ticks: { color: '#4d6080', font: { size: 10 }, maxRotation: 45 },
+          ticks: { color: '#4d6080', font: { size: 10 * FS }, maxRotation: 45 },
           grid:  { color: 'rgba(42,52,68,.4)' },
         },
         y: {
           min: 0, max: 100,
-          ticks: { color: '#4d6080', font: { size: 11 }, callback: v => v + '%' },
+          ticks: { color: '#4d6080', font: { size: 11 * FS }, callback: v => v + '%' },
           grid:  { color: 'rgba(42,52,68,.4)' },
         },
       },
