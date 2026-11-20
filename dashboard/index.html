@@ -238,19 +238,23 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
 .sd-chip{font-family:var(--font-d);font-size:11px;white-space:nowrap;background:transparent;color:var(--amber);
   border:1px solid rgba(232,152,32,.5);border-radius:var(--r);padding:4px 9px;cursor:pointer}
 .sd-chip:hover{background:rgba(232,152,32,.1)}
-.vend-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;align-items:start}
-.vend-grid>.panel{margin:0}
+.vend-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:10px}
 .vend-scroll{max-height:calc(100vh - 210px);overflow:auto}
-.vend-scroll thead th{position:sticky;top:0;z-index:1;background:var(--panel)}
+.vend-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:0;align-items:start}
+.vend-right{border-left:1px solid var(--border);position:relative}
+.vend-left thead th{position:sticky;top:0;z-index:2;background:var(--panel)}
 .vend-sub{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
+#vendorTable{width:100%}
 #vendorTable th{cursor:pointer;user-select:none;white-space:nowrap}
 #vendorTable th:hover{color:var(--bright)}
-#vendorTable td{font-family:var(--font-d)}
+#vendorTable tbody tr{height:31px}
+#vendorTable td{font-family:var(--font-d);white-space:nowrap}
 #vendorTable td:first-child{font-family:var(--font-u);font-weight:500;color:var(--bright)}
-@media (max-width:1100px){.vend-grid{grid-template-columns:1fr}}
-html.tv #tab-vendor.active .vend-grid{flex:1;min-height:0;align-items:stretch}
-html.tv .vend-grid>.panel{display:flex;flex-direction:column;min-height:0}
+.vend-axis{position:sticky;top:0;z-index:2;background:var(--panel);display:flex;justify-content:space-between;
+  font-family:var(--font-d);font-size:10px;color:var(--muted);padding:0 10px;border-bottom:1px solid var(--border)}
+html.tv #tab-vendor.active .vend-panel{flex:1;min-height:0;display:flex;flex-direction:column;margin:0}
 html.tv .vend-scroll{flex:1;min-height:0;max-height:none}
+html.tv #vendorTable tbody tr{height:38px}
 .gap-ok{color:var(--green)} .gap-warn{color:var(--amber);font-weight:600} .gap-bad{color:var(--red);font-weight:600;cursor:help}
 .sd-chip.unset{color:var(--red);border-color:rgba(224,85,85,.6)}
 .sd-row{display:grid;gap:10px}
@@ -431,19 +435,21 @@ html.tv .pd-tile{min-height:84px}
   </div>
   <!-- ══ VENDOR UPDATES ══ -->
   <div id="tab-vendor" class="tab-panel">
-    <div class="vend-grid">
-      <div class="panel vend-left">
-        <div class="panel-title">Vendor Work Summary <span class="vend-sub" id="vendorSub"></span></div>
-        <div class="tbl-wrap vend-scroll"><table id="vendorTable"></table></div>
-      </div>
-      <div class="panel vend-right">
-        <div class="panel-title">Planned vs Current Work — by Vendor</div>
-        <div class="chart-legend" style="margin-bottom:8px">
+    <div class="panel vend-panel">
+      <div class="vend-head">
+        <div class="panel-title" style="margin:0">Vendor Work Summary <span class="vend-sub" id="vendorSub"></span></div>
+        <div class="chart-legend" style="margin:0">
           <div class="chart-legend-item"><div class="leg-line" style="background:rgba(180,180,180,.6);height:10px;border-radius:2px"></div><span>Planned (baseline) hrs</span></div>
           <div class="chart-legend-item"><div class="leg-line" style="background:rgba(75,170,230,.8);height:10px;border-radius:2px"></div><span>Current (forecast) hrs</span></div>
-          <div class="chart-legend-item" style="color:var(--muted)">Same order as the table</div>
+          <div class="chart-legend-item" style="color:var(--muted)" id="vendScaleNote"></div>
         </div>
-        <div class="vend-scroll"><div id="vendorChartBox" style="position:relative"><canvas id="vendorCanvas"></canvas></div></div>
+      </div>
+      <!-- one scroll area: table rows and chart bars line up -->
+      <div class="vend-scroll" id="vendScroll">
+        <div class="vend-grid">
+          <div class="vend-left"><table id="vendorTable"></table></div>
+          <div class="vend-right"><div id="vendorChartBox" style="position:relative"><canvas id="vendorCanvas"></canvas></div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -532,6 +538,7 @@ function switchTab(id, btn) {
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + id).classList.add('active');
   btn.classList.add('active');
+  if (id === 'vendor' && _vendor) requestAnimationFrame(renderVendorChart);
 }
 // ── FETCH ─────────────────────────────────────────────────────
 async function gas(action, extra) {
@@ -992,8 +999,26 @@ function renderVendorChart() {
   const d = _vendor;
   if (!d || !d.vendors) return;
   const rows = vendSorted();
+  const tbl = document.getElementById('vendorTable');
   const box = document.getElementById('vendorChartBox');
-  box.style.height = Math.max(200, rows.length * 26 * FS + 40) + 'px';
+  const tab = document.getElementById('tab-vendor');
+  // measure the table so each vendor's bars sit level with its row (tab must be visible to measure)
+  const measure = () => {
+    const th = tbl.querySelector('thead'), tr = tbl.querySelector('tbody tr');
+    return { head: th ? th.offsetHeight : 34, row: tr ? tr.offsetHeight : 31 };
+  };
+  if (!tab.classList.contains('active')) { _vendPending = true; return; }
+  _vendPending = false;
+  const m = measure();
+  const max = Math.max(1, ...rows.map(v => Math.max(v.planned || 0, v.current || 0)));
+  // sticky scale header the same height as the table header
+  let axis = box.parentElement.querySelector('.vend-axis');
+  if (!axis) { axis = document.createElement('div'); axis.className = 'vend-axis'; box.parentElement.insertBefore(axis, box); }
+  axis.style.height = m.head + 'px'; axis.style.alignItems = 'center';
+  const ticks = [0, .25, .5, .75, 1].map(f => fmtN0(max * f) + ' h');
+  axis.innerHTML = ticks.map(t => `<span>${t}</span>`).join('');
+  box.style.height = (rows.length * m.row) + 'px';
+  document.getElementById('vendScaleNote').textContent = 'Bars line up with the table rows';
   const ctx = document.getElementById('vendorCanvas').getContext('2d');
   if (_vendorChart) _vendorChart.destroy();
   _vendorChart = new Chart(ctx, {
@@ -1002,14 +1027,15 @@ function renderVendorChart() {
       labels: rows.map(v => v.team),
       datasets: [
         { label: 'Planned', data: rows.map(v => v.planned), backgroundColor: 'rgba(180,180,180,.6)', borderColor: 'transparent',
-          barPercentage: 0.85, categoryPercentage: 0.8 },
+          barPercentage: 0.8, categoryPercentage: 0.75 },
         { label: 'Current', data: rows.map(v => v.current), backgroundColor: 'rgba(75,170,230,.8)', borderColor: 'transparent',
-          barPercentage: 0.85, categoryPercentage: 0.8 },
+          barPercentage: 0.8, categoryPercentage: 0.75 },
       ],
     },
     options: {
       indexAxis: 'y',
-      responsive: true, maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false, animation: false,
+      layout: { padding: { left: 10, right: 10, top: 0, bottom: 0 } },
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
@@ -1019,13 +1045,13 @@ function renderVendorChart() {
         },
       },
       scales: {
-        x: { position: 'top', ticks: { color: '#4d6080', font: { size: 11 * FS }, callback: v => fmtN0(v) + ' h' },
-             grid: { color: 'rgba(42,52,68,.4)' } },
-        y: { ticks: { color: '#b8c9e0', font: { size: 11 * FS }, autoSkip: false }, grid: { display: false } },
+        x: { display: false, min: 0, max },
+        y: { display: false, offset: true },
       },
     },
   });
 }
+let _vendPending = false;
 // ── CRITICAL WORKS ────────────────────────────────────────────
 function initCritical() {
   const d = _critical;
