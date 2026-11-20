@@ -29,11 +29,11 @@
         },
         {
           "id": "livetrack",
-          "title": "Shutdown LiveTrack",
-          "desc": "Field progress updates",
+          "title": "TV Dashboared",
+          "desc": "16:9 Format for dispaly",
           "icon": "live",
-          "url": "",
-          "enabled": false,
+          "url": "https://hioshuthub.palmcrest.com.au/dashboard/?tv=1",
+          "enabled": true,
           "open": "tab"
         }
       ]
