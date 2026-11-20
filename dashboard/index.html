@@ -238,6 +238,19 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
 .sd-chip{font-family:var(--font-d);font-size:11px;white-space:nowrap;background:transparent;color:var(--amber);
   border:1px solid rgba(232,152,32,.5);border-radius:var(--r);padding:4px 9px;cursor:pointer}
 .sd-chip:hover{background:rgba(232,152,32,.1)}
+.vend-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:12px;align-items:start}
+.vend-grid>.panel{margin:0}
+.vend-scroll{max-height:calc(100vh - 210px);overflow:auto}
+.vend-scroll thead th{position:sticky;top:0;z-index:1;background:var(--panel)}
+.vend-sub{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
+#vendorTable th{cursor:pointer;user-select:none;white-space:nowrap}
+#vendorTable th:hover{color:var(--bright)}
+#vendorTable td{font-family:var(--font-d)}
+#vendorTable td:first-child{font-family:var(--font-u);font-weight:500;color:var(--bright)}
+@media (max-width:1100px){.vend-grid{grid-template-columns:1fr}}
+html.tv #tab-vendor.active .vend-grid{flex:1;min-height:0;align-items:stretch}
+html.tv .vend-grid>.panel{display:flex;flex-direction:column;min-height:0}
+html.tv .vend-scroll{flex:1;min-height:0;max-height:none}
 .gap-ok{color:var(--green)} .gap-warn{color:var(--amber);font-weight:600} .gap-bad{color:var(--red);font-weight:600;cursor:help}
 .sd-chip.unset{color:var(--red);border-color:rgba(224,85,85,.6)}
 .sd-row{display:grid;gap:10px}
@@ -418,29 +431,20 @@ html.tv .pd-tile{min-height:84px}
   </div>
   <!-- ══ VENDOR UPDATES ══ -->
   <div id="tab-vendor" class="tab-panel">
-    <div class="panel mb12">
-      <div class="panel-title">Field Updates Target &amp; Actual — by Vendor</div>
-      <div class="chart-legend" style="margin-bottom:12px">
-        <div class="chart-legend-item">
-          <div class="leg-line" style="background:#4a9e5c;height:10px;border-radius:2px"></div>
-          <span>% Updated</span>
-        </div>
-        <div class="chart-legend-item">
-          <div class="leg-line" style="background:#aaa;height:10px;border-radius:2px"></div>
-          <span>Target %</span>
-        </div>
-        <div class="chart-legend-item">
-          <div class="leg-line" style="background:#5b9bd5;height:10px;border-radius:2px"></div>
-          <span>Completion Ratio</span>
-        </div>
+    <div class="vend-grid">
+      <div class="panel vend-left">
+        <div class="panel-title">Vendor Work Summary <span class="vend-sub" id="vendorSub"></span></div>
+        <div class="tbl-wrap vend-scroll"><table id="vendorTable"></table></div>
       </div>
-      <div style="position:relative;height:300px">
-        <canvas id="vendorCanvas"></canvas>
+      <div class="panel vend-right">
+        <div class="panel-title">Planned vs Current Work — by Vendor</div>
+        <div class="chart-legend" style="margin-bottom:8px">
+          <div class="chart-legend-item"><div class="leg-line" style="background:rgba(180,180,180,.6);height:10px;border-radius:2px"></div><span>Planned (baseline) hrs</span></div>
+          <div class="chart-legend-item"><div class="leg-line" style="background:rgba(75,170,230,.8);height:10px;border-radius:2px"></div><span>Current (forecast) hrs</span></div>
+          <div class="chart-legend-item" style="color:var(--muted)">Same order as the table</div>
+        </div>
+        <div class="vend-scroll"><div id="vendorChartBox" style="position:relative"><canvas id="vendorCanvas"></canvas></div></div>
       </div>
-    </div>
-    <div class="panel">
-      <div class="panel-title">Vendor Summary</div>
-      <div class="tbl-wrap"><table id="vendorTable"></table></div>
     </div>
   </div>
   <!-- ══ FIELD UPDATES ══ -->
@@ -926,103 +930,101 @@ function renderScurve() {
 }
 // ── VENDOR UPDATES ────────────────────────────────────────────
 let _vendorChart = null;
+let _vendSort = { key: 'team', dir: 1 };
+const VEND_COLS = [
+  { key: 'team',      label: 'Vendor',          align: 'left'  },
+  { key: 'planned',   label: 'Planned Work',    align: 'right', hrs: true },
+  { key: 'current',   label: 'Current Work',    align: 'right', hrs: true },
+  { key: 'actual',    label: 'Actual Work',     align: 'right', hrs: true },
+  { key: 'targetPct', label: 'Target %',        align: 'right' },
+  { key: 'actualPct', label: 'Actual %',        align: 'right' },
+  { key: 'variance',  label: 'Variance',        align: 'right' },
+  { key: 'tasks',     label: 'Total Tasks',     align: 'right' },
+];
+function vendSorted() {
+  const k = _vendSort.key, d = _vendSort.dir;
+  return (_vendor.vendors || []).slice().sort((a, b) =>
+    k === 'team' ? d * a.team.localeCompare(b.team) : d * ((a[k] || 0) - (b[k] || 0)) || a.team.localeCompare(b.team));
+}
+function vendSortBy(k) {
+  _vendSort = _vendSort.key === k ? { key: k, dir: -_vendSort.dir } : { key: k, dir: k === 'team' ? 1 : (k === 'variance' ? 1 : -1) };
+  renderVendorTable(); renderVendorChart();
+}
 function initVendor() {
   const d = _vendor;
   if (!d || !d.vendors) return;
-  renderVendorChart();
   renderVendorTable();
+  renderVendorChart();
+}
+function renderVendorTable() {
+  const d = _vendor;
+  if (!d || !d.vendors) return;
+  document.getElementById('vendorSub').textContent =
+    '— Target % and Actual % at status date ' + (d.statusDate || _statusDateTxt || '') +
+    (d.hasBaseline === false ? ' · no Baseline Work (BW) column found' : '');
+  const arrow = k => _vendSort.key === k ? (_vendSort.dir > 0 ? ' ▲' : ' ▼') : '';
+  const head = VEND_COLS.map(c => `<th style="text-align:${c.align}" onclick="vendSortBy('${c.key}')" title="Sort">${c.label}${arrow(c.key)}</th>`).join('');
+  const varCls = v => v >= 0 ? 'tgt-ok' : v >= -10 ? 'tgt-warn' : 'tgt-bad';
+  const rows = vendSorted();
+  const tot = rows.reduce((t, v) => { t.planned += v.planned; t.current += v.current; t.actual += v.actual; t.tasks += v.tasks; return t; },
+                          { planned: 0, current: 0, actual: 0, tasks: 0 });
+  const body = rows.map(v => `<tr>
+    <td style="text-align:left">${pdEsc(v.team)}</td>
+    <td style="text-align:right">${fmtN1(v.planned)}</td>
+    <td style="text-align:right">${fmtN1(v.current)}</td>
+    <td style="text-align:right">${fmtN1(v.actual)}</td>
+    <td style="text-align:right;color:var(--muted)">${v.targetPct.toFixed(1)}%</td>
+    <td style="text-align:right"><span class="${varCls(v.variance)}">${v.actualPct.toFixed(1)}%</span></td>
+    <td style="text-align:right"><b class="${varCls(v.variance)}">${v.variance > 0 ? '+' : ''}${v.variance.toFixed(1)}</b></td>
+    <td style="text-align:right">${v.tasks}</td>
+  </tr>`).join('');
+  const foot = `<tr style="border-top:2px solid var(--border)">
+    <td style="text-align:left;color:var(--muted)">Total (${rows.length} vendors)</td>
+    <td style="text-align:right;color:var(--bright)">${fmtN1(tot.planned)}</td>
+    <td style="text-align:right;color:var(--bright)">${fmtN1(tot.current)}</td>
+    <td style="text-align:right;color:var(--bright)">${fmtN1(tot.actual)}</td>
+    <td></td><td></td><td></td>
+    <td style="text-align:right;color:var(--bright)">${tot.tasks}</td></tr>`;
+  document.getElementById('vendorTable').innerHTML =
+    `<thead><tr>${head}</tr></thead><tbody>${body || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>`}${rows.length ? foot : ''}</tbody>`;
 }
 function renderVendorChart() {
   const d = _vendor;
-  if (!d || !d.vendors || d.vendors.length === 0) return;
-  const labels    = d.vendors.map(v => v.team);
-  const pctUpd    = d.vendors.map(v => v.pctUpdated);
-  const targetPct = d.vendors.map(v => v.targetPct);
-  const compRatio = d.vendors.map(v => v.completionRatio);
+  if (!d || !d.vendors) return;
+  const rows = vendSorted();
+  const box = document.getElementById('vendorChartBox');
+  box.style.height = Math.max(200, rows.length * 26 * FS + 40) + 'px';
   const ctx = document.getElementById('vendorCanvas').getContext('2d');
   if (_vendorChart) _vendorChart.destroy();
   _vendorChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels,
+      labels: rows.map(v => v.team),
       datasets: [
-        {
-          label: '% Updated',
-          data: pctUpd,
-          backgroundColor: '#4a9e5c',
-          borderRadius: 2,
-        },
-        {
-          label: 'Target %',
-          data: targetPct,
-          backgroundColor: 'rgba(180,180,180,.5)',
-          borderRadius: 2,
-        },
-        {
-          label: 'Completion Ratio',
-          data: compRatio,
-          backgroundColor: '#5b9bd5',
-          borderRadius: 2,
-        },
+        { label: 'Planned', data: rows.map(v => v.planned), backgroundColor: 'rgba(180,180,180,.6)', borderColor: 'transparent',
+          barPercentage: 0.85, categoryPercentage: 0.8 },
+        { label: 'Current', data: rows.map(v => v.current), backgroundColor: 'rgba(75,170,230,.8)', borderColor: 'transparent',
+          barPercentage: 0.85, categoryPercentage: 0.8 },
       ],
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#1c2330', borderColor: '#2a3444', borderWidth: 1,
-          titleColor: '#b8c9e0', bodyColor: '#b8c9e0',
-          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw}%` },
+          backgroundColor: '#1c2330', borderColor: '#2a3444', borderWidth: 1, titleColor: '#b8c9e0', bodyColor: '#b8c9e0',
+          callbacks: { label: c => ` ${c.dataset.label}: ${fmtN1(c.raw)} hrs` },
         },
       },
       scales: {
-        x: {
-          ticks: { color: '#4d6080', font: { size: 10 * FS }, maxRotation: 45 },
-          grid:  { color: 'rgba(42,52,68,.4)' },
-        },
-        y: {
-          min: 0, max: 100,
-          ticks: { color: '#4d6080', font: { size: 11 * FS }, callback: v => v + '%' },
-          grid:  { color: 'rgba(42,52,68,.4)' },
-        },
+        x: { position: 'top', ticks: { color: '#4d6080', font: { size: 11 * FS }, callback: v => fmtN0(v) + ' h' },
+             grid: { color: 'rgba(42,52,68,.4)' } },
+        y: { ticks: { color: '#b8c9e0', font: { size: 11 * FS }, autoSkip: false }, grid: { display: false } },
       },
     },
   });
-}
-function renderVendorTable() {
-  const d = _vendor;
-  if (!d || !d.vendors) return;
-  const cols = [
-    { label: 'Vendor',           align: 'left'   },
-    { label: 'Updated',          align: 'center' },
-    { label: 'Total',            align: 'center' },
-    { label: 'Target Updates',   align: 'center' },
-    { label: '% Updated',        align: 'center' },
-    { label: 'Target %',         align: 'center' },
-    { label: 'Completed Tasks',  align: 'center' },
-    { label: 'Completion Ratio', align: 'center' },
-  ];
-  const pctTag = (p, target=100) => {
-    const cls = p >= target ? 'tag-green' : p >= target * 0.5 ? 'tag-amber' : 'tag-red';
-    return `<span class="tag ${cls}">${p}%</span>`;
-  };
-  const tHead = cols.map(c => `<th style="text-align:${c.align}">${c.label}</th>`).join('');
-  const tBody = d.vendors.map(v => `<tr>
-    <td style="text-align:left;font-weight:500;color:var(--bright)">${v.team}</td>
-    <td style="text-align:center;font-family:var(--font-d)">${v.updated}</td>
-    <td style="text-align:center;font-family:var(--font-d)">${v.total}</td>
-    <td style="text-align:center;font-family:var(--font-d)">${v.targetUpdates}</td>
-    <td style="text-align:center">${pctTag(v.pctUpdated, v.targetPct)}</td>
-    <td style="text-align:center;font-family:var(--font-d);color:var(--muted)">${v.targetPct}%</td>
-    <td style="text-align:center;font-family:var(--font-d)">${v.completedTasks}</td>
-    <td style="text-align:center">${pctTag(v.completionRatio)}</td>
-  </tr>`).join('');
-  document.getElementById('vendorTable').innerHTML =
-    `<thead><tr>${tHead}</tr></thead>` +
-    `<tbody>${tBody || `<tr><td colspan="${cols.length}" style="text-align:center;color:var(--muted);padding:20px">No data</td></tr>`}</tbody>`;
 }
 // ── CRITICAL WORKS ────────────────────────────────────────────
 function initCritical() {
