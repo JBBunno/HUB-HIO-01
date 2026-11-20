@@ -641,7 +641,7 @@ function renderExec() {
   const rw  = kpis.remainingWorkHours || 0;
   document.getElementById('execKpiBand').innerHTML = `
     <div class="kpi-cell">
-      <div class="kpi-cell-label">Percent Complete</div>
+      <div class="kpi-cell-label" title="Actual Work ÷ Work (MS Project % Work Complete)">% Work Complete</div>
       <div class="kpi-cell-value big ${pctCls(pc)}">${pc}%</div>
     </div>
     <div class="kpi-cell">
@@ -675,7 +675,7 @@ function renderExec() {
   if (mwOpt) sel.value = mwOpt.name;
   renderMaintWindow();
   // Area table
-  const cols = ['Area','% Comp','Target','Duration','Completed Work','Total Work','Remaining Work','Start','Forecast Finish','Hrs to Critical','Finish Var'];
+  const cols = ['Area','% Work','Target','Duration','Completed Work','Total Work','Remaining Work','Start','Forecast Finish','Hrs to Critical','Finish Var'];
   const tbody = (areas || []).map((a, idx) => {
     const pc2 = a.pctComplete || 0;
     const tagCls = pc2 >= 90 ? 'tag-green' : pc2 >= 50 ? 'tag-amber' : 'tag-red';
