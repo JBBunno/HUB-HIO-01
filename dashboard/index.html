@@ -439,8 +439,8 @@ html.tv .pd-tile{min-height:84px}
       <div class="vend-head">
         <div class="panel-title" style="margin:0">Vendor Work Summary <span class="vend-sub" id="vendorSub"></span></div>
         <div class="chart-legend" style="margin:0">
-          <div class="chart-legend-item"><div class="leg-line" style="background:rgba(180,180,180,.6);height:10px;border-radius:2px"></div><span>Planned (baseline) hrs</span></div>
           <div class="chart-legend-item"><div class="leg-line" style="background:rgba(75,170,230,.8);height:10px;border-radius:2px"></div><span>Current (forecast) hrs</span></div>
+          <div class="chart-legend-item"><div class="leg-line" style="background:rgba(63,191,127,.8);height:10px;border-radius:2px"></div><span>Actual hrs</span></div>
           <div class="chart-legend-item" style="color:var(--muted)" id="vendScaleNote"></div>
         </div>
       </div>
@@ -649,11 +649,11 @@ function renderExec() {
   document.getElementById('execKpiBand').innerHTML = `
     <div class="kpi-cell">
       <div class="kpi-cell-label" title="Actual Work ÷ Work (MS Project % Work Complete)">% Work Complete</div>
-      <div class="kpi-cell-value big ${pctCls(pc)}">${pc}%</div>
+      <div class="kpi-cell-value big kv-${workLvl(pc, kpis.targetPct)}">${pc}%</div>
     </div>
     <div class="kpi-cell">
       <div class="kpi-cell-label">Target (Baseline)</div>
-      <div class="kpi-cell-value big ${kpis.targetPct == null ? 'kv-white' : tgtCls(pc, kpis.targetPct).replace('tgt-ok','kv-green').replace('tgt-warn','kv-amber').replace('tgt-bad','kv-red')}">
+      <div class="kpi-cell-value big kv-white">
         ${kpis.targetPct == null ? '—' : kpis.targetPct + '%'}</div>
     </div>
     <div class="kpi-cell">
@@ -685,12 +685,12 @@ function renderExec() {
   const cols = ['Area','% Work','Target','Duration','Completed Work','Total Work','Remaining Work','Start','Forecast Finish','Hrs to Critical','Finish Var'];
   const tbody = (areas || []).map((a, idx) => {
     const pc2 = a.pctComplete || 0;
-    const tagCls = pc2 >= 90 ? 'tag-green' : pc2 >= 50 ? 'tag-amber' : 'tag-red';
+    const tagCls = 'tag-' + workLvl(pc2, a.targetPct);
     const htc = a.hoursToCritical || 0;
     return `<tr class="pd-click" onclick="pdShow(_exec.areas[${idx}].name)" title="Click for detail">
       <td>${a.name}</td>
       <td><span class="tag ${tagCls}">${pc2}%</span></td>
-      <td>${a.targetPct == null ? '—' : `<span class="${tgtCls(pc2, a.targetPct)}">${a.targetPct}%</span>`}</td>
+      <td>${a.targetPct == null ? '—' : a.targetPct + '%'}</td>
       <td>${fmtN1(a.duration)}</td>
       <td>${fmtN(a.completedWork,2)}</td>
       <td>${fmtN(a.totalWork,2)}</td>
@@ -737,7 +737,7 @@ function renderMaintWindow() {
     </div>
     <div class="maint-field">
       <div class="maint-field-label">% Complete</div>
-      <div class="maint-field-value ${area.pctComplete >= 90 ? 'green' : area.pctComplete >= 50 ? 'amber' : 'red'}">
+      <div class="maint-field-value ${workLvl(area.pctComplete || 0, area.targetPct)}">
         ${area.pctComplete || 0}%
       </div>
     </div>`;
@@ -746,7 +746,14 @@ function renderMaintWindow() {
 function tgtCls(pc, tg) {
   if (tg === null || tg === undefined) return '';
   const gap = pc - tg;
-  return gap >= 0 ? 'tgt-ok' : gap >= -10 ? 'tgt-warn' : 'tgt-bad';
+  return gap >= 0 ? 'tgt-ok' : gap >= -5 ? 'tgt-warn' : 'tgt-bad';
+}
+// % Work colour against its target: green = on/above target, amber = up to 5 points below, red = more than 5 below.
+// Without a target, falls back to the old % bands.
+function workLvl(pc, tg) {
+  if (tg === null || tg === undefined) return pc >= 90 ? 'green' : pc >= 50 ? 'amber' : 'red';
+  const gap = pc - tg;
+  return gap >= 0 ? 'green' : gap >= -5 ? 'amber' : 'red';
 }
 // ── GANTT ─────────────────────────────────────────────────────
 function renderGantt() {
@@ -1010,7 +1017,7 @@ function renderVendorChart() {
   if (!tab.classList.contains('active')) { _vendPending = true; return; }
   _vendPending = false;
   const m = measure();
-  const max = Math.max(1, ...rows.map(v => Math.max(v.planned || 0, v.current || 0)));
+  const max = Math.max(1, ...rows.map(v => Math.max(v.current || 0, v.actual || 0)));
   // sticky scale header the same height as the table header
   let axis = box.parentElement.querySelector('.vend-axis');
   if (!axis) { axis = document.createElement('div'); axis.className = 'vend-axis'; box.parentElement.insertBefore(axis, box); }
@@ -1026,9 +1033,9 @@ function renderVendorChart() {
     data: {
       labels: rows.map(v => v.team),
       datasets: [
-        { label: 'Planned', data: rows.map(v => v.planned), backgroundColor: 'rgba(180,180,180,.6)', borderColor: 'transparent',
-          barPercentage: 0.8, categoryPercentage: 0.75 },
         { label: 'Current', data: rows.map(v => v.current), backgroundColor: 'rgba(75,170,230,.8)', borderColor: 'transparent',
+          barPercentage: 0.8, categoryPercentage: 0.75 },
+        { label: 'Actual', data: rows.map(v => v.actual), backgroundColor: 'rgba(63,191,127,.8)', borderColor: 'transparent',
           barPercentage: 0.8, categoryPercentage: 0.75 },
       ],
     },
@@ -1036,12 +1043,16 @@ function renderVendorChart() {
       indexAxis: 'y',
       responsive: true, maintainAspectRatio: false, animation: false,
       layout: { padding: { left: 10, right: 10, top: 0, bottom: 0 } },
-      interaction: { mode: 'index', intersect: false },
+      // horizontal bars: pick the vendor by the row under the pointer (y), not by x position
+      interaction: { mode: 'index', axis: 'y', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
           backgroundColor: '#1c2330', borderColor: '#2a3444', borderWidth: 1, titleColor: '#b8c9e0', bodyColor: '#b8c9e0',
-          callbacks: { label: c => ` ${c.dataset.label}: ${fmtN1(c.raw)} hrs` },
+          callbacks: {
+            label: c => ` ${c.dataset.label}: ${fmtN1(c.raw)} hrs`,
+            afterBody: items => { const v = rows[items[0].dataIndex]; return v && v.current ? [` Actual % of current: ${v.actualPct.toFixed(1)}%`] : []; },
+          },
         },
       },
       scales: {
@@ -1096,7 +1107,7 @@ function renderCritical() {
   };
   const pctCls = p => p >= 100 ? 'tag-green' : p > 0 ? 'tag-amber' : 'tag-red';
   const tHead = cols.map(c => `<th style="text-align:${c.align}">${c.label}</th>`).join('');
-  const tBody = rows.map(r => `<tr>
+  const tBody = rows.map(r => `<tr class="pd-click" onclick="critShow(${JSON.stringify(String(r.workOrder || '')).replace(/"/g, '&quot;')})" title="Click for the tasks in this work order">
     <td style="text-align:center">${cpDot(r.cpct)}</td>
     <td style="text-align:center;font-family:var(--font-d)">${r.workOrder || '—'}</td>
     <td style="text-align:left">${r.wo || '—'}</td>
@@ -1324,7 +1335,7 @@ loadAll();
 <div class="pd-bg" id="pdModal" onclick="if(event.target===this)pdClose()">
   <div class="pd-modal" role="dialog" aria-modal="true" aria-labelledby="pdTitle">
     <div class="pd-head">
-      <div><div class="pd-eyebrow">Executive Summary</div><div class="pd-title" id="pdTitle"></div></div>
+      <div><div class="pd-eyebrow" id="pdEyebrow">Executive Summary</div><div class="pd-title" id="pdTitle"></div></div>
       <button class="pd-close" onclick="pdClose()" aria-label="Close">×</button>
     </div>
     <div class="pd-body" id="pdBody"></div>
@@ -1347,7 +1358,7 @@ function pdFetch(){
     .then(d => (_pdRows = (d.rows || []).map(r => ({
       wbs:r[0], name:r[1], pct:r[2], pf:parseShutDate(r[3]), team:r[4],
       slack:r[5], cpct:r[6], summary:!!r[7], es:!!r[8], notes:r[9],
-      wo:r[10] || '', op:r[11] || '', start:parseShutDate(r[12] || ''), ms:!!r[13]
+      wo:r[10] || '', op:r[11] || '', start:parseShutDate(r[12] || ''), ms:!!r[13], dur:r[14]
     })).filter(r => r.name)))
     .catch(e => { _pdErr = e.message; _pdRows = []; return _pdRows; })
     .finally(() => { _pdLoading = null; });
@@ -1361,12 +1372,14 @@ function pdShow(name){
   const pc = a.pctComplete ?? g.pctComplete ?? 0;
   const ov = a.finishVariance || 0;
   const f = (l,v) => `<div><div class="pd-label">${l}</div><div class="pd-value">${v}</div></div>`;
-  const tagCls = pc >= 90 ? 'tag-green' : pc >= 50 ? 'tag-amber' : 'tag-red';
+  const tagCls = 'tag-' + workLvl(pc, a.targetPct);
   document.getElementById('pdTitle').textContent = name;
+  document.getElementById('pdEyebrow').textContent = 'Executive Summary';
   document.getElementById('pdBody').innerHTML =
     `<div class="pd-bar"><b style="width:${Math.min(100,pc)}%"></b></div>
      <div class="pd-grid">
-       ${f('% Complete', `<span class="tag ${tagCls}">${pc}%</span>`)}
+       ${f('% Work Complete', `<span class="tag ${tagCls}">${pc}%</span>`)}
+       ${f('Target (Baseline)', a.targetPct != null ? a.targetPct + '%' : '—')}
        ${f('Start', pdEsc(a.start || '—'))}
        ${f('Forecast Finish', pdEsc(a.forecastFinish || '—'))}
        ${f('Total Work', a.totalWork != null ? fmtN1(a.totalWork) + ' h' : '—')}
@@ -1450,6 +1463,49 @@ function pdPick(k){
       (list.length > MAX ? `<div class="pd-more">Showing first ${MAX} of ${list.length}.</div>` : '<div class="pd-more"></div>');
 }
 function pdClose(){ document.getElementById('pdModal').classList.remove('open'); }
+
+// ── CRITICAL WORKS pop-up: tasks in the work order ────────────
+function critShow(key){
+  if (!key) return;
+  const c = ((_critical && _critical.rows) || []).find(r => String(r.workOrder) === String(key)) || {};
+  document.getElementById('pdEyebrow').textContent = 'Critical Works — ' + (c.cpct === 1 ? 'CP' : c.cpct === 2 ? 'CT' : '');
+  document.getElementById('pdTitle').textContent = key + (c.wo ? ' — ' + c.wo : '');
+  document.getElementById('pdBody').innerHTML = '<div class="pd-loading">Loading tasks from schedule…</div>';
+  document.getElementById('pdModal').classList.add('open');
+  const title = document.getElementById('pdTitle').textContent;
+  pdFetch().then(rows => {
+    if (document.getElementById('pdTitle').textContent !== title) return;
+    // tasks: operations of the work order, or (for a flagged WBS row) the tasks beneath it
+    let tasks = rows.filter(r => r.wo && String(r.wo) === String(key) && !r.summary);
+    if (!tasks.length) tasks = rows.filter(r => !r.summary && r.wbs && r.wbs.indexOf(key + '.') === 0);
+    tasks.sort((a, b) => (parseFloat(a.op) || 0) - (parseFloat(b.op) || 0) || (a.start || 0) - (b.start || 0));
+    // Executive Summary area = deepest Exec-Summary row whose WBS contains the task
+    const esRows = rows.filter(r => r.es && r.wbs).sort((a, b) => b.wbs.length - a.wbs.length);
+    const areaOf = t => { const e = esRows.find(x => t.wbs === x.wbs || (t.wbs || '').indexOf(x.wbs + '.') === 0); return e ? e.name : '—'; };
+    const durTxt = v => { const n = parseFloat(v); return isNaN(n) ? (v || '—') : fmtN1(n) + ' h'; };
+    const pctTag = p => `<span class="tag ${p >= 100 ? 'tag-green' : p > 0 ? 'tag-amber' : 'tag-red'}">${p}%</span>`;
+    const body = tasks.map(t => `<tr>
+        <td class="pd-wo">${pdEsc(t.op || '')}</td>
+        <td>${pdEsc(t.name)}${t.notes ? ` <span class="pd-note" title="${pdEsc(t.notes)}">📝</span>` : ''}</td>
+        <td>${durTxt(t.dur)}</td>
+        <td>${pctTag(t.pct)}</td>
+        <td style="text-align:left">${pdEsc(areaOf(t))}</td></tr>`).join('');
+    const f = (l, v) => `<div><div class="pd-label">${l}</div><div class="pd-value">${v}</div></div>`;
+    document.getElementById('pdBody').innerHTML =
+      `<div class="pd-grid">
+         ${f('Team', pdEsc(c.team || '—'))}
+         ${f('Start', pdEsc(c.start || '—'))}
+         ${f('Finish', pdEsc(c.finish || '—'))}
+         ${f('% Complete', c.pctComplete != null ? pctTag(c.pctComplete) : '—')}
+         ${f('Total Slack', c.totalSlack != null ? fmtN1(c.totalSlack) + ' h' : '—')}
+         ${f('Tasks', tasks.length)}
+       </div>
+       <div class="pd-sec-label">Tasks in this work order</div>` +
+      (tasks.length
+        ? `<div class="pd-scroll"><table class="pd-late"><thead><tr><th>Op</th><th>Task</th><th>Duration</th><th>% Complete</th><th style="text-align:left">Executive Summary area</th></tr></thead><tbody>${body}</tbody></table></div>`
+        : `<div class="pd-notes pd-empty">No tasks found for this work order${_pdErr ? ' (' + pdEsc(_pdErr) + ')' : ''}.</div>`);
+  });
+}
 // ── STATUS DATE (scheduler edit) ──────────────────────────────
 // Saves to Meta!B4 in the sheet via the same Apps Script (doPost, PIN = upload PIN),
 // so the dashboard, Gantt and everyone viewing use the same status date.
