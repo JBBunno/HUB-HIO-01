@@ -243,7 +243,10 @@ td.notes-cell{white-space:normal;max-width:260px;color:var(--bright);text-align:
 .vend-grid{display:grid;grid-template-columns:1.35fr 1fr;gap:0;align-items:start}
 .vend-right{border-left:1px solid var(--border);position:relative}
 .vend-left thead th{position:sticky;top:0;z-index:2;background:var(--panel)}
-.vend-sub{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
+.vend-sub{color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400;font-size:11px}
+.vend-area{background:var(--panel);color:var(--bright);border:1px solid var(--border);border-radius:var(--r);
+  padding:6px 10px;font-family:var(--font-u);font-size:12px;max-width:320px}
+html.tv .vend-area{font-size:16px;min-height:44px}
 #vendorTable{width:100%}
 #vendorTable th{cursor:pointer;user-select:none;white-space:nowrap}
 #vendorTable th:hover{color:var(--bright)}
@@ -437,7 +440,11 @@ html.tv .pd-tile{min-height:84px}
   <div id="tab-vendor" class="tab-panel">
     <div class="panel vend-panel">
       <div class="vend-head">
-        <div class="panel-title" style="margin:0">Vendor Work Summary <span class="vend-sub" id="vendorSub"></span></div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div class="panel-title" style="margin:0">Vendor Work Summary</div>
+          <select id="vendArea" class="vend-area" onchange="vendSetArea(this.value)" title="Filter by Executive Summary area"></select>
+          <span class="vend-sub" id="vendorSub"></span>
+        </div>
         <div class="chart-legend" style="margin:0">
           <div class="chart-legend-item"><div class="leg-line" style="background:rgba(75,170,230,.8);height:10px;border-radius:2px"></div><span>Current (forecast) hrs</span></div>
           <div class="chart-legend-item"><div class="leg-line" style="background:rgba(63,191,127,.8);height:10px;border-radius:2px"></div><span>Actual hrs</span></div>
@@ -945,6 +952,16 @@ function renderScurve() {
 // ── VENDOR UPDATES ────────────────────────────────────────────
 let _vendorChart = null;
 let _vendSort = { key: 'team', dir: 1 };
+let _vendArea = -1;                                   // -1 = all areas, else index into _vendor.areas
+function vendList() {
+  const d = _vendor || {};
+  return (_vendArea >= 0 && d.byArea && d.byArea[_vendArea]) ? d.byArea[_vendArea] : (d.vendors || []);
+}
+function vendSetArea(v) {
+  _vendArea = parseInt(v, 10);
+  if (isNaN(_vendArea)) _vendArea = -1;
+  renderVendorTable(); renderVendorChart();
+}
 const VEND_COLS = [
   { key: 'team',      label: 'Vendor',          align: 'left'  },
   { key: 'planned',   label: 'Planned Work',    align: 'right', hrs: true },
@@ -957,7 +974,7 @@ const VEND_COLS = [
 ];
 function vendSorted() {
   const k = _vendSort.key, d = _vendSort.dir;
-  return (_vendor.vendors || []).slice().sort((a, b) =>
+  return vendList().slice().sort((a, b) =>
     k === 'team' ? d * a.team.localeCompare(b.team) : d * ((a[k] || 0) - (b[k] || 0)) || a.team.localeCompare(b.team));
 }
 function vendSortBy(k) {
@@ -967,6 +984,13 @@ function vendSortBy(k) {
 function initVendor() {
   const d = _vendor;
   if (!d || !d.vendors) return;
+  const sel = document.getElementById('vendArea');
+  const areas = d.areas || [];
+  if (_vendArea >= areas.length) _vendArea = -1;
+  sel.innerHTML = '<option value="-1">Executive Summary: All areas</option>' +
+    areas.map((a, i) => `<option value="${i}">${pdEsc(a)}</option>`).join('');
+  sel.value = String(_vendArea);
+  sel.style.display = areas.length ? '' : 'none';
   renderVendorTable();
   renderVendorChart();
 }
@@ -974,7 +998,7 @@ function renderVendorTable() {
   const d = _vendor;
   if (!d || !d.vendors) return;
   document.getElementById('vendorSub').textContent =
-    '— Target % and Actual % at status date ' + (d.statusDate || _statusDateTxt || '') +
+    'Target % and Actual % at status date ' + (d.statusDate || _statusDateTxt || '') +
     (d.hasBaseline === false ? ' · no Baseline Work (BW) column found' : '');
   const arrow = k => _vendSort.key === k ? (_vendSort.dir > 0 ? ' ▲' : ' ▼') : '';
   const head = VEND_COLS.map(c => `<th style="text-align:${c.align}" onclick="vendSortBy('${c.key}')" title="Sort">${c.label}${arrow(c.key)}</th>`).join('');
@@ -1467,9 +1491,13 @@ function pdClose(){ document.getElementById('pdModal').classList.remove('open');
 // ── VENDOR pop-up: work orders (header level) ─────────────────
 let _vwLists = null;
 function vendShow(team){
-  const v = ((_vendor && _vendor.vendors) || []).find(x => x.team === team);
+  const v = vendList().find(x => x.team === team);
   if (!v) return;
-  const wos = (v.wos || []).map(w => ({ wo:w[0], hdr:w[1], n:w[2], done:w[3], pct:w[4], start:w[5], finish:w[6], status:w[7] }));
+  const src = (_vendor.wos && _vendor.wos[team]) || v.wos || [];
+  const wos = src
+    .filter(w => _vendArea < 0 || !Array.isArray(w[8]) || w[8].indexOf(_vendArea) >= 0)
+    .map(w => ({ wo:w[0], hdr:w[1], n:w[2], done:w[3], pct:w[4], start:w[5], finish:w[6], status:w[7] }));
+  const areaName = _vendArea >= 0 ? (_vendor.areas || [])[_vendArea] : '';
   _vwLists = {
     all:  { label:'All work orders', rows: wos },
     done: { label:'Completed',       rows: wos.filter(w => w.status === 'Completed') },
@@ -1480,7 +1508,7 @@ function vendShow(team){
   const varCls = x => x >= 0 ? 'tgt-ok' : x >= -5 ? 'tgt-warn' : 'tgt-bad';
   const tile = (k, color) => `<div class="pd-stat pd-tile" data-k="${k}" onclick="vendPick('${k}')" title="Show list">
       <b style="color:${color}">${_vwLists[k].rows.length}</b><span>${k === 'all' ? 'Work orders' : _vwLists[k].label}</span></div>`;
-  document.getElementById('pdEyebrow').textContent = 'Vendor';
+  document.getElementById('pdEyebrow').textContent = 'Vendor' + (areaName ? ' — ' + areaName : '');
   document.getElementById('pdTitle').textContent = team;
   document.getElementById('pdBody').innerHTML =
     `<div class="pd-grid">
