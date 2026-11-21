@@ -982,7 +982,7 @@ function renderVendorTable() {
   const rows = vendSorted();
   const tot = rows.reduce((t, v) => { t.planned += v.planned; t.current += v.current; t.actual += v.actual; t.tasks += v.tasks; return t; },
                           { planned: 0, current: 0, actual: 0, tasks: 0 });
-  const body = rows.map(v => `<tr>
+  const body = rows.map(v => `<tr class="pd-click" onclick="vendShow(${JSON.stringify(v.team).replace(/"/g, '&quot;')})" title="Click for this vendor's work orders">
     <td style="text-align:left">${pdEsc(v.team)}</td>
     <td style="text-align:right">${fmtN1(v.planned)}</td>
     <td style="text-align:right">${fmtN1(v.current)}</td>
@@ -1464,6 +1464,61 @@ function pdPick(k){
 }
 function pdClose(){ document.getElementById('pdModal').classList.remove('open'); }
 
+// ── VENDOR pop-up: work orders (header level) ─────────────────
+let _vwLists = null;
+function vendShow(team){
+  const v = ((_vendor && _vendor.vendors) || []).find(x => x.team === team);
+  if (!v) return;
+  const wos = (v.wos || []).map(w => ({ wo:w[0], hdr:w[1], n:w[2], done:w[3], pct:w[4], start:w[5], finish:w[6], status:w[7] }));
+  _vwLists = {
+    all:  { label:'All work orders', rows: wos },
+    done: { label:'Completed',       rows: wos.filter(w => w.status === 'Completed') },
+    prog: { label:'In progress',     rows: wos.filter(w => w.status === 'In progress') },
+    ns:   { label:'Not started',     rows: wos.filter(w => w.status === 'Not started') },
+  };
+  const f = (l, val) => `<div><div class="pd-label">${l}</div><div class="pd-value">${val}</div></div>`;
+  const varCls = x => x >= 0 ? 'tgt-ok' : x >= -5 ? 'tgt-warn' : 'tgt-bad';
+  const tile = (k, color) => `<div class="pd-stat pd-tile" data-k="${k}" onclick="vendPick('${k}')" title="Show list">
+      <b style="color:${color}">${_vwLists[k].rows.length}</b><span>${k === 'all' ? 'Work orders' : _vwLists[k].label}</span></div>`;
+  document.getElementById('pdEyebrow').textContent = 'Vendor';
+  document.getElementById('pdTitle').textContent = team;
+  document.getElementById('pdBody').innerHTML =
+    `<div class="pd-grid">
+       ${f('Current Work', fmtN1(v.current) + ' h')}
+       ${f('Actual Work', fmtN1(v.actual) + ' h')}
+       ${f('Planned Work', fmtN1(v.planned) + ' h')}
+       ${f('Target %', v.targetPct.toFixed(1) + '%')}
+       ${f('Actual %', `<span class="${varCls(v.variance)}">${v.actualPct.toFixed(1)}%</span>`)}
+       ${f('Variance', `<b class="${varCls(v.variance)}">${v.variance > 0 ? '+' : ''}${v.variance.toFixed(1)}</b>`)}
+     </div>
+     <div class="pd-sec-label">Work orders <span class="pd-hint">— header level, this vendor's operations only · click a tile to filter</span></div>
+     <div class="pd-stats" style="grid-template-columns:repeat(4,1fr)">
+       ${tile('all', 'var(--bright)')}${tile('done', 'var(--green)')}${tile('prog', 'var(--blue)')}${tile('ns', 'var(--amber)')}
+     </div>
+     <div id="pdList"></div>`;
+  document.getElementById('pdModal').classList.add('open');
+  vendPick('all');
+}
+function vendPick(k){
+  if (!_vwLists || !_vwLists[k]) return;
+  document.querySelectorAll('.pd-tile').forEach(el => el.classList.toggle('sel', el.dataset.k === k));
+  const L = _vwLists[k];
+  const stTag = s => `<span class="tag ${s === 'Completed' ? 'tag-green' : s === 'In progress' ? 'tag-amber' : 'tag-red'}">${s}</span>`;
+  const body = L.rows.map(w => `<tr>
+      <td class="pd-wo">${pdEsc(w.wo)}</td>
+      <td>${pdEsc(w.hdr || '—')}</td>
+      <td>${w.done}/${w.n}</td>
+      <td>${w.pct}%</td>
+      <td class="pd-wo">${pdEsc(w.start || '—')}</td>
+      <td class="pd-wo">${pdEsc(w.finish || '—')}</td>
+      <td>${stTag(w.status)}</td></tr>`).join('');
+  document.getElementById('pdList').innerHTML = !L.rows.length
+    ? `<div class="pd-more">No work orders in this list.</div>`
+    : `<div class="pd-list-head">${L.label} — ${L.rows.length}</div>
+       <div class="pd-scroll"><table class="pd-late"><thead><tr><th>Work Order</th><th>Description</th><th>Ops done</th><th>%</th><th>Start</th><th>Finish</th><th>Status</th></tr></thead>
+       <tbody>${body}</tbody></table></div>`;
+}
+
 // ── CRITICAL WORKS pop-up: tasks in the work order ────────────
 function critShow(key){
   if (!key) return;
@@ -1496,9 +1551,9 @@ function critShow(key){
          ${f('Team', pdEsc(c.team || '—'))}
          ${f('Start', pdEsc(c.start || '—'))}
          ${f('Finish', pdEsc(c.finish || '—'))}
-         ${f('% Complete', c.pctComplete != null ? pctTag(c.pctComplete) : '—')}
+         ${f('% Complete (all ops)', c.pctComplete != null ? pctTag(c.pctComplete) : '—')}
          ${f('Total Slack', c.totalSlack != null ? fmtN1(c.totalSlack) + ' h' : '—')}
-         ${f('Tasks', tasks.length)}
+         ${f('Operations complete', c.opsTotal != null ? c.opsDone + ' of ' + c.opsTotal : tasks.length)}
        </div>
        <div class="pd-sec-label">Tasks in this work order</div>` +
       (tasks.length
