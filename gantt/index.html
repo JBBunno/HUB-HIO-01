@@ -338,10 +338,10 @@ const ZOOMS = {
   month: {label:'Months', unit:'month', top:'year',  px:72, ms:30.44*DAY}
 };
 const COLS = [
-  {k:'wbs',   t:'WBS',       w:70},
-  {k:'name',  t:'Task name', w:500, wn:190},
+  {k:'id',    t:'ID',        w:56},
   {k:'order', t:'Order',     w:92,  narrowHide:true},
   {k:'oper',  t:'Op',        w:52,  narrowHide:true},
+  {k:'name',  t:'Task name', w:500, wn:190},
   {k:'start', t:'Start',     w:114, narrowHide:true},
   {k:'finish',t:'Finish',    w:114, narrowHide:true},
   {k:'dur',   t:'Dur',       w:66,  narrowHide:true},
@@ -948,6 +948,7 @@ function rowHTML(t, vi){
   let cells = '';
   for(const c of S.cols){
     switch(c.k){
+      case 'id': cells += `<div class="c wbs" style="width:${c.w}px" title="${t.wbs ? 'WBS ' + esc(t.wbs) : ''}">${esc(t.synthetic ? '' : t.id)}</div>`; break;
       case 'wbs': cells += `<div class="c wbs" style="width:${c.w}px">${esc(t.wbs || t.id)}</div>`; break;
       case 'name': cells += `<div class="c name" style="width:${c.w}px;padding-left:${4 + lvl * 14}px"><span class="chev">${t.summary ? (S.expanded.has(t.i) ? '▾' : '▸') : ''}</span><span class="dot ${st}" title="${ST_LABEL[st]}"></span><span class="nm" title="${esc(t.name)}">${esc(t.name)}</span>${t.summary ? '<span class="info" data-act="card" title="Open summary card">ⓘ</span>' : ''}</div>`; break;
       case 'team': cells += `<div class="c" style="width:${c.w}px" title="${esc(t.team || '')}">${esc(t.team || '')}</div>`; break;
@@ -1348,6 +1349,15 @@ async function loadGoogle(input, opts={}){
     const txt = await r.text();
     if(/^\s*(<!doctype|<html)/i.test(txt)) throw new Error('the sheet is not shared as "Anyone with the link"');
     const wb = XLSX.read(txt, {type:'string', raw:true});
+    // The upload panel clears and rewrites the Tasks tab, so for a few seconds the sheet can be empty.
+    // If no header row is found, keep what's on screen and try again shortly instead of opening the column box.
+    if(!wb.SheetNames.some(sn => findHeader(sheetAOA(wb, sn)))){
+      const n = (opts.retry || 0) + 1;
+      $('#notice').textContent = n <= 6 ? 'Sheet is being updated – retrying…' : 'Sheet has no task rows right now – press Refresh to try again';
+      if(n <= 6) setTimeout(() => loadGoogle(input, {...opts, retry:n, quiet:true, keepView: opts.keepView || S.base.length > 0}), 15000);
+      return 'retry';   // truthy, so the first load doesn't fall back to sample data
+    }
+    if(opts.retry) $('#notice').textContent = '';
     const auto = S.live ? S.live.auto : (opts.auto != null ? opts.auto : CONFIG.AUTO_REFRESH_MIN);
     S.live = {input, id:s.id, auto: opts.auto != null ? opts.auto : auto, at:Date.now()};
     loadWorkbook(wb, 'Google Sheet', {keepView: !!opts.keepView});
