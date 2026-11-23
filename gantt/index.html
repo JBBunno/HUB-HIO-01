@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HIO Schedule Viewer – Gantt</title>
+<title>Schedule Viewer – Gantt</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -55,11 +55,11 @@ input,select{font:inherit;border:1px solid var(--line2);border-radius:6px;paddin
 #canvas{position:relative}
 #hdr{position:sticky;top:0;z-index:20;height:var(--hdrH);background:#f7f9fb;border-bottom:1px solid var(--line2)}
 #hcells{position:sticky;left:0;z-index:3;display:flex;height:100%;background:#f7f9fb;border-right:2px solid var(--line2)}
+#hcells div{display:flex;align-items:flex-end;padding:0 6px 7px;font-weight:600;font-size:11.5px;color:var(--muted);border-right:1px solid var(--line);text-transform:uppercase;letter-spacing:.3px}
 #hcells div{position:relative}
 #hcells .rsz{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:2}
 #hcells .rsz:hover,#hcells .rsz.drag{background:linear-gradient(90deg,transparent 3px,var(--task) 3px,var(--task) 5px,transparent 5px)}
 body.colDrag,body.colDrag *{cursor:col-resize!important;user-select:none!important}
-#hcells div{display:flex;align-items:flex-end;padding:0 6px 7px;font-weight:600;font-size:11.5px;color:var(--muted);border-right:1px solid var(--line);text-transform:uppercase;letter-spacing:.3px}
 #axis{position:absolute;left:0;top:0;height:100%;z-index:1}
 .tt,.bt{position:absolute;border-left:1px solid var(--line2);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
 .tt{top:0;height:24px;line-height:24px;font-weight:600;color:var(--ink);border-bottom:1px solid var(--line)}
@@ -103,18 +103,6 @@ body.colDrag,body.colDrag *{cursor:col-resize!important;user-select:none!importa
 .bar.crit{background:var(--critBg);border-color:var(--crit)} .bar.crit .pg{background:var(--crit)}
 .bar.done{background:var(--doneBg);border-color:var(--done)} .bar.done .pg{background:var(--done)}
 .bar.late{box-shadow:0 0 0 2px rgba(224,123,0,.45)}
-/* inactive tasks (MS Project Active = No) */
-:root{--inact:#9aa3ae;--inactBg:#eef0f3}
-.bar.inact{background:repeating-linear-gradient(135deg,var(--inactBg) 0 4px,#dfe3e8 4px 8px);border:1px dashed var(--inact);box-shadow:none}
-.bar.inact .pg{background:var(--inact);opacity:.6}
-.sbar.inact{background:#d3d8de} .sbar.inact .pg{background:var(--inact)}
-.sbar.inact:before,.sbar.inact:after{border-top-color:var(--inact)}
-.ms.inact{background:transparent;border:2px dashed var(--inact)}
-.row.inact .c{color:#a9b1bc}
-.row.inact .nm{text-decoration:line-through;font-style:italic}
-.row.inact .lbl{color:#b4bcc6;font-style:italic}
-.row.inact .bl{opacity:.4}
-.dot.inact{background:transparent;border:1.5px solid var(--inact);box-sizing:border-box}
 .sbar{position:absolute;top:8px;height:7px;background:#9aa5b3}
 .sbar .pg{position:absolute;left:0;top:0;bottom:0;background:var(--sum)}
 .sbar:before,.sbar:after{content:"";position:absolute;top:7px;border-top:5px solid var(--sum)}
@@ -127,6 +115,18 @@ body.colDrag,body.colDrag *{cursor:col-resize!important;user-select:none!importa
 .bl{position:absolute;top:21px;height:3px;background:#b4bcc7;border-radius:1px}
 .lbl{position:absolute;top:0;line-height:var(--rowH);font-size:11.5px;color:var(--muted);white-space:nowrap;pointer-events:none}
 .empty{padding:60px 20px;text-align:center;color:var(--muted)}
+/* inactive tasks (MS Project Active = No) */
+:root{--inact:#9aa3ae;--inactBg:#eef0f3}
+.bar.inact{background:repeating-linear-gradient(135deg,var(--inactBg) 0 4px,#dfe3e8 4px 8px);border:1px dashed var(--inact);box-shadow:none}
+.bar.inact .pg{background:var(--inact);opacity:.6}
+.sbar.inact{background:#d3d8de} .sbar.inact .pg{background:var(--inact)}
+.sbar.inact:before,.sbar.inact:after{border-top-color:var(--inact)}
+.ms.inact{background:transparent;border:2px dashed var(--inact)}
+.row.inact .c{color:#a9b1bc}
+.row.inact .nm{text-decoration:line-through;font-style:italic}
+.row.inact .lbl{color:#b4bcc6;font-style:italic}
+.row.inact .bl{opacity:.4}
+.dot.inact{background:transparent;border:1.5px solid var(--inact);box-sizing:border-box}
 
 /* job card */
 #card{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:#fff;box-shadow:-8px 0 30px rgba(15,42,68,.18);z-index:60;transform:translateX(105%);transition:transform .2s ease;display:flex;flex-direction:column}
@@ -195,7 +195,7 @@ body:not(.sched) .sched-only{display:none!important}
 <body>
 
 <div class="top">
-  <div class="brand">PalmCrest<small>HIO Schedule Viewer</small></div>
+  <div class="brand">PalmCrest<small id="brandSub">Schedule Viewer</small></div>
   <div class="proj" id="projName">Loading…<small id="projSub"></small></div>
   <div class="kpi" id="kpi"></div>
   <button id="btnRefresh" title="Reload the Google Sheet now" style="display:none">⟳ Refresh</button>
@@ -206,7 +206,7 @@ body:not(.sched) .sched-only{display:none!important}
 </div>
 
 <div class="toolbar">
-  <input type="search" id="q" placeholder="Search task, WBS, work order…">
+  <input type="search" id="q" name="gantt-task-search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Search task, WBS, work order…">
   <label>Filter</label>
   <select id="filter">
     <option value="all">All tasks</option>
@@ -309,7 +309,7 @@ body:not(.sched) .sched-only{display:none!important}
 <div class="ovl" id="pinOvl"><div class="dlg" style="max-width:340px">
   <h3>Scheduler access</h3>
   <div class="db"><p style="margin-top:0">Enter the scheduler PIN to load a different file or sheet.</p>
-    <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" style="width:100%">
+    <input id="pinIn" type="text" name="gantt-sched-pin" inputmode="numeric" autocomplete="off" style="width:100%;-webkit-text-security:disc">
     <p id="pinErr" style="color:var(--crit);margin-bottom:0;min-height:1em"></p></div>
   <div class="df"><button id="pinCancel">Cancel</button><button class="primary" id="pinGo">Unlock</button></div>
 </div></div>
@@ -324,13 +324,31 @@ body:not(.sched) .sched-only{display:none!important}
 const CONFIG = {
   // Google Sheet to load (must be shared "Anyone with the link can view"). Leave '' to skip.
   // Add #gid=NNN (from the sheet's URL) to pick a tab other than the first one.
-  SHEET: 'https://docs.google.com/spreadsheets/d/1rJZekITWewCW6qZEmWmheDzgMDseTRJhBUxVfzQoTmU/edit#gid=322475886',   // HIO Gantt Data – Tasks tab
+  SHEET: '',                    // set at start-up to this site's backend (see SITE + CONFIG below)
   AUTO_REFRESH_MIN: 5,          // minutes between automatic reloads of the Google Sheet (0 = off)
-  FILE: '',                     // HIO uses the Google Sheet above (no local Excel file)
+  FILE: '',                     // no local Excel file – data comes from the backend
   // Scheduler PIN (SHA-256 hash). Tap the "PalmCrest" logo 5 times to unlock Load Excel / Google Sheet.
   // Default PIN 2468 – to change, hash a new PIN (e.g. the Hub admin "Change access code" tool) and paste here.
   SCHED_PIN_HASH: 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972'
 };
+/* ================= SITE + CONFIG =================
+   One Gantt page serves every shutdown for this client: /gantt/?site=d1
+   Settings come from ../config/<site>.json  →  { "title": "…", "api": "<GAS /exec URL>" }
+   The Tasks data is read through the backend (action=taskscsv), so the
+   Google Sheets do not need to be shared publicly. */
+const SITE = (new URLSearchParams(location.search).get('site') || '').trim().toLowerCase();
+const API_SRC = 'site:' + SITE;          // marker meaning "this site's backend" (used as CONFIG.SHEET)
+let SITE_CFG = null;
+async function loadSiteConfig(){
+  if(!/^[a-z0-9_-]+$/.test(SITE)) throw new Error('No shutdown selected – open the Gantt from the hub (missing ?site=).');
+  const r = await fetch('../config/' + SITE + '.json?t=' + Date.now(), {cache:'no-store'});
+  if(!r.ok) throw new Error('No configuration found for "' + SITE + '".');
+  SITE_CFG = await r.json();
+  if(!SITE_CFG.api) throw new Error('"' + SITE + '" has no API URL in its config.');
+  CONFIG.SHEET = API_SRC;
+  const t = (SITE_CFG.title || '').replace(/\s*dashboard\s*$/i, '').trim();
+  if(t){ document.title = t + ' – Gantt'; const b = document.getElementById('brandSub'); if(b) b.textContent = t + ' · Gantt'; }
+}
 /* ================= constants ================= */
 const RH = 26, HDR = 48;
 const HOUR = 36e5, DAY = 864e5;
@@ -342,14 +360,13 @@ const ZOOMS = {
   month: {label:'Months', unit:'month', top:'year',  px:72, ms:30.44*DAY}
 };
 const COLS = [
-  {k:'id',    t:'ID',        w:56},
-  {k:'order', t:'Order',     w:92,  narrowHide:true},
-  {k:'oper',  t:'Op',        w:52,  narrowHide:true},
+  {k:'wbs',   t:'WBS',       w:70},
   {k:'name',  t:'Task name', w:500, wn:190},
+  {k:'team',  t:'Team',      w:100, narrowHide:true},
+  {k:'res',   t:'Resource',  w:120, narrowHide:true},
   {k:'start', t:'Start',     w:114, narrowHide:true},
   {k:'finish',t:'Finish',    w:114, narrowHide:true},
   {k:'dur',   t:'Dur',       w:66,  narrowHide:true},
-  {k:'team',  t:'Team',      w:110, narrowHide:true},
   {k:'pct',   t:'%',         w:54}
 ];
 const FIELDS = [
@@ -358,8 +375,7 @@ const FIELDS = [
   ['critical','Critical (Yes/No)'],['preds','Predecessors'],['team','Team'],['res','Resource names'],['notes','Notes'],
   ['bstart','Baseline start'],['bfinish','Baseline finish'],['astart','Actual start'],['afinish','Actual finish'],
   ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)'],
-  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)'],['active','Active (Yes/No)'],
-  ['order','Order number'],['oper','Operation number']
+  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)'],['active','Active (Yes/No)']
 ];
 const ALIASES = {
   name:['name','taskname','task','activityname','activity','description','tasks'],
@@ -381,8 +397,7 @@ const ALIASES = {
   deadline:['deadline'], sdate:['statusdate','datadate'], link:['hyperlink','hyperlinkaddress','link'],
   exec:['executivesummary','executivcesummary','execsummary','exec'],
   slack:['totalslack','slack','totalfloat','float'], cpct:['cpct','cpctflag','cpflag'],
-  active:['active','isactive','taskactive'],
-  order:['ordernumber','order','workorder','wo','orderno'], oper:['operationnumber','operation','operationno','opno','op']
+  active:['active','isactive','taskactive']
 };
 const DATE_FIELDS = ['start','finish','bstart','bfinish','astart','afinish','deadline','sdate'];
 const ST_LABEL = {done:'Complete', late:'Late', ip:'In progress', ns:'Not started', inact:'Inactive'};
@@ -499,7 +514,7 @@ function autoMap(headers){
   }
   return map;
 }
-const mapKey = headers => 'hiogantt.map.' + headers.map(norm).join('|').slice(0, 400);
+const mapKey = headers => 'pcgantt.map.' + headers.map(norm).join('|').slice(0, 400);
 
 function sheetAOA(wb, sn){ return XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:''}); }
 
@@ -578,8 +593,6 @@ function applyData(opts={}){
       predsRaw: String(get(r, 'preds') ?? '').trim(),
       res: String(get(r, 'res') ?? '').trim(),
       team: String(get(r, 'team') ?? '').trim(),
-      order: String(get(r, 'order') ?? '').trim(),
-      oper: String(get(r, 'oper') ?? '').trim(),
       notes: String(get(r, 'notes') ?? '').trim(),
       bstart: parseDate(get(r, 'bstart'), dmy), bfinish: parseDate(get(r, 'bfinish'), dmy),
       astart: parseDate(get(r, 'astart'), dmy), afinish: parseDate(get(r, 'afinish'), dmy),
@@ -788,8 +801,8 @@ function restoreView(prev){
 
 /* ================= status & visibility ================= */
 function status(t){
-  if(t.inactive) return 'inact';
   const sd = +S.statusDate;
+  if(t.inactive) return 'inact';
   if(t.pct >= 99.5) return 'done';
   if(t.finish && +t.finish < sd) return 'late';
   if(t.start && +t.start < sd && t.pct <= 0) return 'late';
@@ -800,10 +813,10 @@ function matches(t){
   if(q && !t.search.includes(q)) return false;
   if(S.fTeam && (t.summary || t.team !== S.fTeam)) return false;
   if(S.fRes && (t.summary || !(t.resList || []).includes(S.fRes))) return false;
-  const sd = +S.statusDate;
   // 'All tasks' shows everything; 'Inactive only' shows just inactive rows; every other filter leaves inactive rows out
   if(S.filter === 'inactive') return !!t.inactive;
   if(t.inactive && S.filter !== 'all') return false;
+  const sd = +S.statusDate;
   switch(S.filter){
     case 'all': return true;
     case 'open': return !t.summary && status(t) !== 'done';   // in progress + not started (incl. late)
@@ -952,12 +965,9 @@ function rowHTML(t, vi){
   let cells = '';
   for(const c of S.cols){
     switch(c.k){
-      case 'id': cells += `<div class="c wbs" style="width:${c.w}px" title="${t.wbs ? 'WBS ' + esc(t.wbs) : ''}">${esc(t.synthetic ? '' : t.id)}</div>`; break;
       case 'wbs': cells += `<div class="c wbs" style="width:${c.w}px">${esc(t.wbs || t.id)}</div>`; break;
       case 'name': cells += `<div class="c name" style="width:${c.w}px;padding-left:${4 + lvl * 14}px"><span class="chev">${t.summary ? (S.expanded.has(t.i) ? '▾' : '▸') : ''}</span><span class="dot ${st}" title="${ST_LABEL[st]}"></span><span class="nm" title="${esc(t.name)}">${esc(t.name)}</span>${t.summary ? '<span class="info" data-act="card" title="Open summary card">ⓘ</span>' : ''}</div>`; break;
       case 'team': cells += `<div class="c" style="width:${c.w}px" title="${esc(t.team || '')}">${esc(t.team || '')}</div>`; break;
-      case 'order': cells += `<div class="c" style="width:${c.w}px" title="${esc(t.order || '')}">${esc(t.order || '')}</div>`; break;
-      case 'oper': cells += `<div class="c" style="width:${c.w}px">${esc(t.summary && t.oper === '0' ? '' : (t.oper || ''))}</div>`; break;
       case 'res': cells += `<div class="c" style="width:${c.w}px" title="${esc(t.res || '')}">${esc(t.res || '')}</div>`; break;
       case 'start': cells += `<div class="c dt" style="width:${c.w}px">${fmtShort(t.start)}</div>`; break;
       case 'finish': cells += `<div class="c dt" style="width:${c.w}px">${fmtShort(t.finish)}</div>`; break;
@@ -1152,35 +1162,6 @@ $('#btnMapOpen').addEventListener('click', () => { $('#helpOvl').classList.remov
 scroller.addEventListener('scroll', render, {passive:true});
 addEventListener('resize', () => { layout(); refresh(); });
 
-/* ================= adjustable column widths (saved in this browser) ================= */
-const COLW = (() => { try { return JSON.parse(lsGet('hiogantt.colw') || '{}') || {}; } catch(e) { return {}; } })();
-const saveColW = () => lsSet('hiogantt.colw', JSON.stringify(COLW));
-let colDrag = null, lastRsz = {};
-$('#hcells').addEventListener('pointerdown', e => {
-  const h = e.target.closest('.rsz'); if(!h || innerWidth < 760) return;
-  e.preventDefault(); e.stopPropagation();
-  const c = S.cols.find(x => x.k === h.dataset.col); if(!c) return;
-  // double-click (two presses on the same edge within 400 ms) puts the column back to its default width
-  const now = Date.now();
-  if(lastRsz.k === c.k && now - lastRsz.t < 400){ lastRsz = {}; delete COLW[c.k]; saveColW(); layout(); refresh(); return; }
-  lastRsz = {k:c.k, t:now};
-  colDrag = {k:c.k, x0:e.clientX, w0:c.w, raf:0, moved:false};
-  h.classList.add('drag'); document.body.classList.add('colDrag');
-});
-addEventListener('pointermove', e => {
-  if(!colDrag) return;
-  colDrag.moved = true;
-  COLW[colDrag.k] = Math.max(32, Math.min(900, Math.round(colDrag.w0 + e.clientX - colDrag.x0)));
-  if(!colDrag.raf) colDrag.raf = requestAnimationFrame(() => {
-    if(!colDrag) return; colDrag.raf = 0;
-    layout(); refresh();
-    const h = $(`#hcells .rsz[data-col="${colDrag.k}"]`); if(h) h.classList.add('drag');
-  });
-});
-const endColDrag = () => { if(!colDrag) return; const moved = colDrag.moved; colDrag = null; if(!moved){ document.body.classList.remove('colDrag'); document.querySelectorAll('#hcells .rsz.drag').forEach(x => x.classList.remove('drag')); return; } lastRsz = {}; document.body.classList.remove('colDrag'); document.querySelectorAll('#hcells .rsz.drag').forEach(x => x.classList.remove('drag')); saveColW(); layout(); refresh(); };
-addEventListener('pointerup', endColDrag); addEventListener('pointercancel', endColDrag);
-
-
 $('#rows').addEventListener('click', e => {
   const row = e.target.closest('.row'); if(!row) return;
   const i = +row.dataset.i, t = S.tasks[i];
@@ -1206,6 +1187,39 @@ addEventListener('keydown', e => {
 });
 function $$ovlClose(){ document.querySelectorAll('.ovl.open').forEach(o => o.classList.remove('open')); }
 
+/* ================= adjustable column widths (saved in this browser) ================= */
+const COLW = (() => { try { return JSON.parse(lsGet('pcgantt.colw') || '{}') || {}; } catch(e) { return {}; } })();
+const saveColW = () => lsSet('pcgantt.colw', JSON.stringify(COLW));
+let colDrag = null, lastRsz = {};
+$('#hcells').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.rsz'); if(!h || innerWidth < 760) return;
+  e.preventDefault(); e.stopPropagation();
+  const c = S.cols.find(x => x.k === h.dataset.col); if(!c) return;
+  // double-click (two presses on the same edge within 400 ms) puts the column back to its default width
+  const now = Date.now();
+  if(lastRsz.k === c.k && now - lastRsz.t < 400){ lastRsz = {}; delete COLW[c.k]; saveColW(); layout(); refresh(); return; }
+  lastRsz = {k:c.k, t:now};
+  colDrag = {k:c.k, x0:e.clientX, w0:c.w, raf:0, moved:false};
+  h.classList.add('drag'); document.body.classList.add('colDrag');
+});
+addEventListener('pointermove', e => {
+  if(!colDrag) return;
+  colDrag.moved = true;
+  COLW[colDrag.k] = Math.max(32, Math.min(900, Math.round(colDrag.w0 + e.clientX - colDrag.x0)));
+  if(!colDrag.raf) colDrag.raf = requestAnimationFrame(() => {
+    if(!colDrag) return; colDrag.raf = 0;
+    layout(); refresh();
+    const h = $(`#hcells .rsz[data-col="${colDrag.k}"]`); if(h) h.classList.add('drag');
+  });
+});
+const endColDrag = () => {
+  if(!colDrag) return; const moved = colDrag.moved; colDrag = null;
+  document.body.classList.remove('colDrag'); document.querySelectorAll('#hcells .rsz.drag').forEach(x => x.classList.remove('drag'));
+  if(!moved) return;
+  lastRsz = {}; saveColW(); layout(); refresh();
+};
+addEventListener('pointerup', endColDrag); addEventListener('pointercancel', endColDrag);
+
 /* tooltip */
 const tip = $('#tip');
 $('#rows').addEventListener('mousemove', e => {
@@ -1229,7 +1243,7 @@ addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#drop').classL
 function isSched(){ return document.body.classList.contains('sched'); }
 function setSched(on){
   document.body.classList.toggle('sched', on);
-  try { on ? sessionStorage.setItem('hiogantt.sched', '1') : sessionStorage.removeItem('hiogantt.sched'); } catch(e) {}
+  try { on ? sessionStorage.setItem('pcgantt.sched', '1') : sessionStorage.removeItem('pcgantt.sched'); } catch(e) {}
 }
 async function sha256(t){
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
@@ -1253,11 +1267,11 @@ $('#pinIn').addEventListener('keydown', e => { if(e.key === 'Enter') tryPin(); }
 $('#pinCancel').addEventListener('click', () => $('#pinOvl').classList.remove('open'));
 $('#btnLock').addEventListener('click', () => {
   setSched(false);
-  // back to the official HIO sheet if a different source was loaded
+  // back to this site's official data if a different source was loaded
   if(!S.live || S.live.input !== CONFIG.SHEET){ S.live = null; loadGoogle(CONFIG.SHEET); }
   toast('Scheduler mode off');
 });
-try { if(sessionStorage.getItem('hiogantt.sched') === '1') document.body.classList.add('sched'); } catch(e) {}
+try { if(sessionStorage.getItem('pcgantt.sched') === '1') document.body.classList.add('sched'); } catch(e) {}
 
 async function readFile(f){
   if(!window.XLSX){ toast('The Excel reader could not load – check your internet connection'); return; }
@@ -1372,7 +1386,10 @@ function parseSheetLink(input){
     url:`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv${g ? '&gid=' + g[1] : ''}`};
 }
 async function loadGoogle(input, opts={}){
-  const s = parseSheetLink(input);
+  const isApi = input === API_SRC;
+  const s = isApi
+    ? {id:null, url: SITE_CFG.api + '?site=' + encodeURIComponent(SITE) + '&action=taskscsv'}
+    : parseSheetLink(input);
   if(!s){ if(!opts.quiet) toast("That doesn't look like a Google Sheet link"); return false; }
   if(!window.XLSX){ if(!opts.quiet) toast('The spreadsheet reader could not load – check your internet connection'); return false; }
   const btn = $('#btnRefresh'); btn.disabled = true;
@@ -1380,22 +1397,14 @@ async function loadGoogle(input, opts={}){
     const r = await fetch(s.url + '&_=' + Date.now(), {cache:'no-store'});
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const txt = await r.text();
-    if(/^\s*(<!doctype|<html)/i.test(txt)) throw new Error('the sheet is not shared as "Anyone with the link"');
+    if(/^\s*(<!doctype|<html)/i.test(txt)) throw new Error(isApi ? 'the backend did not return data' : 'the sheet is not shared as "Anyone with the link"');
+    if(isApi && /^\s*\{\s*"error"/.test(txt)) throw new Error(JSON.parse(txt).error);
     const wb = XLSX.read(txt, {type:'string', raw:true});
-    // The upload panel clears and rewrites the Tasks tab, so for a few seconds the sheet can be empty.
-    // If no header row is found, keep what's on screen and try again shortly instead of opening the column box.
-    if(!wb.SheetNames.some(sn => findHeader(sheetAOA(wb, sn)))){
-      const n = (opts.retry || 0) + 1;
-      $('#notice').textContent = n <= 6 ? 'Sheet is being updated – retrying…' : 'Sheet has no task rows right now – press Refresh to try again';
-      if(n <= 6) setTimeout(() => loadGoogle(input, {...opts, retry:n, quiet:true, keepView: opts.keepView || S.base.length > 0}), 15000);
-      return 'retry';   // truthy, so the first load doesn't fall back to sample data
-    }
-    if(opts.retry) $('#notice').textContent = '';
     const auto = S.live ? S.live.auto : (opts.auto != null ? opts.auto : CONFIG.AUTO_REFRESH_MIN);
     S.live = {input, id:s.id, auto: opts.auto != null ? opts.auto : auto, at:Date.now()};
-    loadWorkbook(wb, 'Google Sheet', {keepView: !!opts.keepView});
-    await applyMetaStatusDate(s.id);
-    if(opts.keepView && !opts.quiet) toast('Refreshed from Google Sheet');
+    loadWorkbook(wb, isApi ? 'Live schedule' : 'Google Sheet', {keepView: !!opts.keepView});
+    if(isApi) await applyApiStatusDate(); else await applyMetaStatusDate(s.id);
+    if(opts.keepView && !opts.quiet) toast(isApi ? 'Refreshed' : 'Refreshed from Google Sheet');
     return true;
   } catch(e){
     if(!opts.quiet) toast('Could not read the Google Sheet: ' + e.message, 5000);
@@ -1418,6 +1427,21 @@ async function applyMetaStatusDate(id){
     if(!S.sdManual){ S.statusDate = d; setStatusInput(); updateKPI(); refresh(); }
     S.sdFromUpload = true;
   } catch(e) { /* no Meta tab or not reachable – keep current time */ }
+}
+// Status date set on the dashboard (scheduler PIN) – same date everyone sees.
+// Used unless the viewer has picked their own date in the Status date box.
+async function applyApiStatusDate(){
+  try {
+    const r = await fetch(SITE_CFG.api + '?site=' + encodeURIComponent(SITE) + '&action=meta&_=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) return;
+    const m = await r.json();
+    if(!m || !m.statusDateSet || !m.statusDate) return;
+    const d = parseDate(m.statusDate, true);          // backend sends dd/MM/yy HH:mm
+    if(!d) return;
+    S.dataSD = d;
+    if(!S.sdManual){ S.statusDate = d; setStatusInput(); updateKPI(); refresh(); }
+    S.sdFromUpload = true;
+  } catch(e) { /* keep current time */ }
 }
 function updateSourceLabels(){
   const t = d => `${p2(d.getHours())}:${p2(d.getMinutes())}`;
@@ -1464,16 +1488,16 @@ $('#sortBy').addEventListener('change', e => {
 $('#g2').addEventListener('change', regroup);
 $('#btnRefresh').addEventListener('click', () => { if(S.live) loadGoogle(S.live.input, {keepView:true}); });
 $('#btnSheet').addEventListener('click', () => {
-  $('#sheetUrl').value = S.live ? S.live.input : (lsGet('hiogantt.sheet') || CONFIG.SHEET || '');
+  $('#sheetUrl').value = S.live && S.live.input !== API_SRC ? S.live.input : (lsGet('pcgantt.sheet') || '');
   $('#sheetAuto').value = String(S.live ? S.live.auto : CONFIG.AUTO_REFRESH_MIN);
   $('#sheetOvl').classList.add('open'); setTimeout(() => $('#sheetUrl').focus(), 50);
 });
 $('#sheetCancel').addEventListener('click', () => $('#sheetOvl').classList.remove('open'));
-$('#sheetForget').addEventListener('click', () => { try { localStorage.removeItem('hiogantt.sheet'); } catch(e) {} toast('Saved link removed from this browser'); });
+$('#sheetForget').addEventListener('click', () => { try { localStorage.removeItem('pcgantt.sheet'); } catch(e) {} toast('Saved link removed from this browser'); });
 $('#sheetGo').addEventListener('click', async () => {
   const url = $('#sheetUrl').value.trim(), auto = +$('#sheetAuto').value;
   S.live = null;
-  if(await loadGoogle(url, {auto})){ lsSet('hiogantt.sheet', url); $('#sheetOvl').classList.remove('open'); }
+  if(await loadGoogle(url, {auto})){ lsSet('pcgantt.sheet', url); $('#sheetOvl').classList.remove('open'); }
 });
 setInterval(() => {
   if(S.live && S.live.auto > 0 && Date.now() - S.live.at >= S.live.auto * 60000 && !document.hidden && !document.querySelector('.ovl.open'))
@@ -1502,12 +1526,12 @@ async function boot(){
   setStatusInput(); buildZoomButtons();
   let qs = {};
   try { qs = Object.fromEntries(new URLSearchParams(location.search)); } catch(e) {}
-  // Everyone sees the HIO sheet; saved links / ?sheet= / ?file= only apply in scheduler mode
+  // Everyone sees this site's live schedule; saved links / ?sheet= / ?file= only apply in scheduler mode
   if(!isSched()) qs = {};
-  const sheet = isSched() ? (qs.sheet || lsGet('hiogantt.sheet') || (qs.file ? '' : CONFIG.SHEET)) : CONFIG.SHEET;
+  const sheet = isSched() ? (qs.sheet || lsGet('pcgantt.sheet') || (qs.file ? '' : CONFIG.SHEET)) : CONFIG.SHEET;
   if(sheet){
     if(await loadGoogle(sheet, {quiet:true})) return;
-    toast("Couldn't reach the Google Sheet from here – showing sample data. (Previews inside Claude block outside data; it works once hosted, e.g. on GitHub Pages. You can also use File › Download › .xlsx in Sheets and drop the file here.)", 9000);
+    toast("Couldn't load the live schedule – showing sample data. Use Refresh to try again.", 9000);
   }
   const src = qs.file || CONFIG.FILE;
   if(src){
@@ -1522,7 +1546,8 @@ async function boot(){
   }
   loadSample();
 }
-boot();
+try { $('#q').value = ''; } catch(e) {}
+loadSiteConfig().then(boot).catch(e => { toast(e.message, 9000); });
 </script>
 </body>
 </html>
