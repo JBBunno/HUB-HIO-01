@@ -55,6 +55,10 @@ input,select{font:inherit;border:1px solid var(--line2);border-radius:6px;paddin
 #canvas{position:relative}
 #hdr{position:sticky;top:0;z-index:20;height:var(--hdrH);background:#f7f9fb;border-bottom:1px solid var(--line2)}
 #hcells{position:sticky;left:0;z-index:3;display:flex;height:100%;background:#f7f9fb;border-right:2px solid var(--line2)}
+#hcells div{position:relative}
+#hcells .rsz{position:absolute;top:0;right:-4px;width:8px;height:100%;cursor:col-resize;z-index:2}
+#hcells .rsz:hover,#hcells .rsz.drag{background:linear-gradient(90deg,transparent 3px,var(--task) 3px,var(--task) 5px,transparent 5px)}
+body.colDrag,body.colDrag *{cursor:col-resize!important;user-select:none!important}
 #hcells div{display:flex;align-items:flex-end;padding:0 6px 7px;font-weight:600;font-size:11.5px;color:var(--muted);border-right:1px solid var(--line);text-transform:uppercase;letter-spacing:.3px}
 #axis{position:absolute;left:0;top:0;height:100%;z-index:1}
 .tt,.bt{position:absolute;border-left:1px solid var(--line2);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
@@ -891,7 +895,7 @@ const X = t => S.gridW + (t - S.t0) * S.px;
 const scroller = $('#scroller');
 function layout(){
   const narrow = innerWidth < 760;
-  S.cols = COLS.filter(c => !(narrow && c.narrowHide)).map(c => ({...c, w: narrow && c.wn ? c.wn : c.w}));
+  S.cols = COLS.filter(c => !(narrow && c.narrowHide)).map(c => ({...c, w: narrow && c.wn ? c.wn : (COLW[c.k] || c.w)}));
   S.gridW = S.cols.reduce((a, c) => a + c.w, 0) + 2;
   const Z = ZOOMS[S.zoom]; S.px = Z.px / Z.ms;
   let mn = Infinity, mx = -Infinity;
@@ -907,7 +911,7 @@ function layout(){
   $('#axis').style.width = S.canvasW + 'px';
   $('#hcells').style.width = S.gridW + 'px';
   $('#cover').style.width = S.gridW + 'px';
-  $('#hcells').innerHTML = S.cols.map(c => `<div style="width:${c.w}px;${c.k==='pct'?'justify-content:flex-end':''}">${c.t}</div>`).join('');
+  $('#hcells').innerHTML = S.cols.map(c => `<div style="width:${c.w}px;${c.k==='pct'?'justify-content:flex-end':''}">${c.t}<span class="rsz" data-col="${c.k}" title="Drag to resize · double-click to reset"></span></div>`).join('');
 }
 function refresh(){
   buildVisible();
@@ -1147,6 +1151,35 @@ $('#btnMapOpen').addEventListener('click', () => { $('#helpOvl').classList.remov
 
 scroller.addEventListener('scroll', render, {passive:true});
 addEventListener('resize', () => { layout(); refresh(); });
+
+/* ================= adjustable column widths (saved in this browser) ================= */
+const COLW = (() => { try { return JSON.parse(lsGet('hiogantt.colw') || '{}') || {}; } catch(e) { return {}; } })();
+const saveColW = () => lsSet('hiogantt.colw', JSON.stringify(COLW));
+let colDrag = null, lastRsz = {};
+$('#hcells').addEventListener('pointerdown', e => {
+  const h = e.target.closest('.rsz'); if(!h || innerWidth < 760) return;
+  e.preventDefault(); e.stopPropagation();
+  const c = S.cols.find(x => x.k === h.dataset.col); if(!c) return;
+  // double-click (two presses on the same edge within 400 ms) puts the column back to its default width
+  const now = Date.now();
+  if(lastRsz.k === c.k && now - lastRsz.t < 400){ lastRsz = {}; delete COLW[c.k]; saveColW(); layout(); refresh(); return; }
+  lastRsz = {k:c.k, t:now};
+  colDrag = {k:c.k, x0:e.clientX, w0:c.w, raf:0, moved:false};
+  h.classList.add('drag'); document.body.classList.add('colDrag');
+});
+addEventListener('pointermove', e => {
+  if(!colDrag) return;
+  colDrag.moved = true;
+  COLW[colDrag.k] = Math.max(32, Math.min(900, Math.round(colDrag.w0 + e.clientX - colDrag.x0)));
+  if(!colDrag.raf) colDrag.raf = requestAnimationFrame(() => {
+    if(!colDrag) return; colDrag.raf = 0;
+    layout(); refresh();
+    const h = $(`#hcells .rsz[data-col="${colDrag.k}"]`); if(h) h.classList.add('drag');
+  });
+});
+const endColDrag = () => { if(!colDrag) return; const moved = colDrag.moved; colDrag = null; if(!moved){ document.body.classList.remove('colDrag'); document.querySelectorAll('#hcells .rsz.drag').forEach(x => x.classList.remove('drag')); return; } lastRsz = {}; document.body.classList.remove('colDrag'); document.querySelectorAll('#hcells .rsz.drag').forEach(x => x.classList.remove('drag')); saveColW(); layout(); refresh(); };
+addEventListener('pointerup', endColDrag); addEventListener('pointercancel', endColDrag);
+
 
 $('#rows').addEventListener('click', e => {
   const row = e.target.closest('.row'); if(!row) return;
